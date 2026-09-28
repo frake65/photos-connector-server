@@ -26,10 +26,31 @@ foreach (['LICENSE', 'CHANGELOG.md', 'appinfo/info.xml'] as $name) {
     file_put_contents($path, '');
     try { rejected($stage); } finally { file_put_contents($path, $original); }
 }
+$signaturePath = "$root/appinfo/signature.json";
+$validSignature = json_encode([
+    'appId' => 'apple_photos_connector',
+    'signature' => 'base64-signature',
+    'certificate' => "-----BEGIN CERTIFICATE-----\ncertificate\n-----END CERTIFICATE-----",
+], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+file_put_contents($signaturePath, $validSignature);
+try {
+    $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/../tools/check-package.php') . ' ' . escapeshellarg($stage);
+    exec($command . ' 2>&1', $output, $code);
+    if ($code !== 0) throw new RuntimeException('Valid signature.json rejected');
+} finally { unlink($signaturePath); }
+foreach ([
+    '{"appId":"wrong","signature":"x","certificate":"-----BEGIN CERTIFICATE-----\\nx\\n-----END CERTIFICATE-----"}',
+    '{"appId":"apple_photos_connector","signature":"","certificate":"-----BEGIN CERTIFICATE-----\\nx\\n-----END CERTIFICATE-----"}',
+    '{"appId":"apple_photos_connector","signature":"x","certificate":"not-a-certificate"}',
+    '{"appId":"apple_photos_connector","signature":"x"}',
+] as $invalidSignature) {
+    file_put_contents($signaturePath, $invalidSignature);
+    try { rejected($stage); } finally { unlink($signaturePath); }
+}
 $path = "$root/appinfo/info.xml";
 $original = file_get_contents($path);
 foreach (['<id>apple_photos_connector</id>' => '<id>wrong</id>', '<version>0.8.8</version>' => '<version>9.0.0</version>'] as $from => $to) {
     file_put_contents($path, str_replace($from, $to, $original));
     try { rejected($stage); } finally { file_put_contents($path, $original); }
 }
-echo "PASS: 19 invalid package scenarios rejected\n";
+echo "PASS: invalid package scenarios and signature.json validation\n";

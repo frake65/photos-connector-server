@@ -10,6 +10,14 @@ app; companion macOS changes below are provided for context.
   user-scoped idempotency-key replay for inventory requests. Inventory v1,
   upload endpoints, and album endpoints remain unchanged.
 
+### Verified
+- Prepare the 0.8.8 package with the repository-local lint, runtime and
+  archive checks before signing.
+- Keep the unsigned release archive free of `appinfo/signature.json`; add the
+  official signature only during the controlled Nextcloud signing step.
+- Move release, documentation, website and issue links to the dedicated server
+  repository.
+
 ## [0.8.7] - 2026-09-24
 
 ### Changed

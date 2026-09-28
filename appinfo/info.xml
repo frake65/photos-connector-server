@@ -20,13 +20,13 @@ Der Import ist nicht destruktiv. Bereits in Nextcloud gespeicherte Dateien werde
     <author>Frank Kettenbeil</author>
     <namespace>ApplePhotosConnector</namespace>
     <documentation>
-        <user>https://github.com/frake65/nextcloud-apple-photos-connector/blob/main/README.md</user>
-        <admin>https://github.com/frake65/nextcloud-apple-photos-connector/blob/main/nextcloud-app/README.md</admin>
+        <user>https://github.com/frake65/photos-connector-server/blob/main/README.md</user>
+        <admin>https://github.com/frake65/photos-connector-server/blob/main/README.md</admin>
     </documentation>
     <category>multimedia</category>
-    <website>https://github.com/frake65/nextcloud-apple-photos-connector</website>
-    <bugs>https://github.com/frake65/nextcloud-apple-photos-connector/issues</bugs>
-    <repository type="git">https://github.com/frake65/nextcloud-apple-photos-connector.git</repository>
+    <website>https://github.com/frake65/photos-connector-server</website>
+    <bugs>https://github.com/frake65/photos-connector-server/issues</bugs>
+    <repository type="git">https://github.com/frake65/photos-connector-server.git</repository>
     <dependencies>
         <php min-version="8.2"/>
         <nextcloud min-version="34" max-version="35"/>
