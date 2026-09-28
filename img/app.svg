@@ -1,28 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Photos Connector</title>
-  <desc id="desc">Eine stilisierte Fotokarte vor einer Wolke.</desc>
-  <defs>
-    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#123C4A"/>
-      <stop offset="1" stop-color="#176A70"/>
-    </linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
-      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#092A35" flood-opacity=".28"/>
-    </filter>
-  </defs>
+  <desc id="desc">Ein neutrales Foto-Symbol mit Upload-Pfeil vor einer Wolke.</desc>
 
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#background)"/>
+  <!-- Monochrome, brand-neutral app icon: no Apple or Nextcloud logo geometry. -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="#000"/>
 
-  <!-- A simple, solid cloud silhouette; no arrows or brand-specific geometry. -->
-  <path d="M118 244c-26 0-47-21-47-47s21-47 47-47c7 0 14 2 20 4 15-33 48-56 87-56 49 0 90 36 97 83 35 2 63 31 63 67 0 37-30 67-67 67H118c-20 0-36-16-36-36s16-35 36-35Z" fill="#BFE8DF"/>
+  <!-- Neutral cloud outline, raised so the upload arrow ends inside it. -->
+  <g transform="translate(0 -42)">
+    <path d="M120 294h106 M286 294h104c31 0 56-25 56-56s-25-56-56-56h-8c-8-45-47-79-94-79-36 0-68 20-84 51-7-3-15-5-24-5-30 0-55 24-55 54 0 6 1 12 3 18h-8c-25 0-45 20-45 45s20 45 45 45" fill="none" stroke="#fff" stroke-width="24" stroke-linejoin="round"/>
+  </g>
 
-  <!-- Photo card with an abstract landscape symbol. -->
-  <g filter="url(#shadow)" transform="rotate(-5 256 345)">
-    <rect x="142" y="250" width="228" height="174" rx="22" fill="#FFF8E9"/>
-    <rect x="160" y="268" width="192" height="126" rx="12" fill="#E3F1E9"/>
-    <circle cx="304" cy="300" r="17" fill="#F4AC61"/>
-    <path d="m160 368 48-48 35 33 30-24 79 65H172c-7 0-12-6-12-13v-13Z" fill="#4A9D89"/>
-    <path d="m160 377 53-37 35 28 24-18 80 54H172c-7 0-12-6-12-13v-14Z" fill="#28736F"/>
-    <rect x="180" y="405" width="80" height="7" rx="3.5" fill="#D5D1C5"/>
+  <!-- The arrow tip sits at the cloud's visual center; its tail starts above the photo. -->
+  <path d="M256 286V170m0 0-42 42m42-42 42 42" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Photo card with abstract, non-branded landscape. -->
+  <g transform="rotate(-6 256 417)">
+    <rect x="126" y="309" width="260" height="170" rx="24" fill="#fff" stroke="#000" stroke-width="16"/>
+    <rect x="151" y="334" width="210" height="120" rx="10" fill="#000"/>
+    <circle cx="313" cy="368" r="16" fill="#fff"/>
+    <path d="m151 425 54-54 37 35 31-27 88 75H161c-6 0-10-5-10-11v-18Z" fill="#fff"/>
+    <path d="m151 440 53-36 38 29 27-20 92 60H161c-6 0-10-5-10-11v-22Z" fill="#000"/>
   </g>
 </svg>
