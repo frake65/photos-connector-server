@@ -17,14 +17,24 @@ foreach (['id' => 'apple_photos_connector', 'version' => '0.8.8', 'licence' => '
     if ($xpath->evaluate("string(/info/$key)") !== $value) fail("unexpected $key");
 }
 if (($argv[2] ?? '') !== '' && !$xml->schemaValidate($argv[2])) fail('info.xml does not validate against supplied XSD');
+$signaturePath = $root . '/appinfo/signature.json';
+if (is_file($signaturePath)) {
+    $signature = json_decode((string) file_get_contents($signaturePath), true);
+    if (!is_array($signature) || json_last_error() !== JSON_ERROR_NONE) fail('signature.json is not valid JSON');
+    foreach (['appId', 'signature', 'certificate'] as $key) {
+        if (!isset($signature[$key]) || !is_string($signature[$key]) || trim($signature[$key]) === '') fail("signature.json missing non-empty $key");
+    }
+    if ($signature['appId'] !== 'apple_photos_connector') fail('signature.json appId mismatch');
+    if (!preg_match('/-----BEGIN CERTIFICATE-----\s+.+\s+-----END CERTIFICATE-----/s', $signature['certificate'])) fail('signature.json certificate is not PEM encoded');
+}
 $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
 foreach ($files as $file) {
     $name = $file->getFilename();
     if ($file->isLink()) fail('symbolic links are not allowed');
     if ($name === '.DS_Store' || str_starts_with($name, '._') || in_array($name, ['.git', '.build', 'tests', 'tools'], true)) fail("unwanted entry: $name");
     if (in_array($name, ['AlbumTestResolveCommand.php', 'AlbumTestAddMembershipCommand.php', 'AlbumTestService.php', 'AlbumMembershipTestService.php', 'build-package.sh', 'check-package.sh'], true)) fail("development artifact: $name");
-    if (preg_match('/\.(key|p12|pfx|pem|csr|crt|cer|der)$/i', $name) || preg_match('/^id_(rsa|dsa|ecdsa|ed25519)$/', $name)) fail("key/certificate material: $name");
-    if ($file->isFile() && preg_match('/-----BEGIN (?:CERTIFICATE|(?:NEW )?CERTIFICATE REQUEST)-----/', file_get_contents($file->getPathname()))) fail("certificate/CSR content: $name");
+    if ($file->getPathname() !== $signaturePath && (preg_match('/\.(key|p12|pfx|pem|csr|crt|cer|der)$/i', $name) || preg_match('/^id_(rsa|dsa|ecdsa|ed25519)$/', $name))) fail("key/certificate material: $name");
+    if ($file->isFile() && $file->getPathname() !== $signaturePath && preg_match('/-----BEGIN (?:CERTIFICATE|(?:NEW )?CERTIFICATE REQUEST)-----/', file_get_contents($file->getPathname()))) fail("certificate/CSR content: $name");
     if ($file->isFile() && preg_match('/-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/', file_get_contents($file->getPathname()))) fail("private key content: $name");
 }
 echo "Package checks passed.\n";

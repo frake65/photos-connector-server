@@ -1,5 +1,8 @@
 # Photos Connector — Server App
 
+The server-side source, release preparation and issue tracker are maintained in
+the [Photos Connector server repository](https://github.com/frake65/photos-connector-server).
+
 App-ID: `apple_photos_connector`, Version 0.8.8 laut `appinfo/info.xml`. PHP ab 8.2; die App-Metadaten deklarieren Nextcloud 34–35. Die separate macOS-App **Photos Connector** ist erforderlich und wird nicht über den Nextcloud App Store verteilt. Original-Uploads und additive Album-Synchronisation sind implementiert. Album-Recovery und idempotente Wiederholung wurden manuell mit Nextcloud 35 und Photos 8.0.0 geprüft.
 
 ## Frische Serverinstallation
@@ -104,6 +107,27 @@ Run-Tests prüfen neue, bekannte und leere Inventare, separate Runs, Benutzertre
 Upload-Tests prüfen Aufträge, Retry nach Fehler, idempotente Bestätigung, Benutzer-/Pfadgrenzen und erhaltene Dateien bei leeren Folgescans. Der Datei-Locator ist dabei ein Testdouble; echte WebDAV-/Nextcloud-Dateisystemintegration ist nicht Teil dieses lokalen Tests. Die Identitätstests verwenden zwischen Scans bestätigte Dateireferenzen als Fixtures, damit sie weiterhin die unveränderte Apple-Identitätslogik prüfen.
 
 Am 10. September 2026 bestanden die lokale PHP-Syntaxprüfung (45 Dateien) und alle eigenständigen SQLite-Szenarien einschließlich der vollständigen Fresh-Install-Migration. Eine echte Nextcloud-Integration wurde dabei nicht ausgeführt. Die deklarierte Nextcloud-Spanne ist keine getestete Versionsmatrix; insbesondere sind MySQL/PostgreSQL-Sperrverhalten und die Photos-Adapter-Integration separat zu prüfen.
+
+## Release 0.8.8 verification
+
+The 0.8.8 release candidate is prepared from the `0.8.8` metadata in
+`appinfo/info.xml`. Before signing or publishing, run the complete local
+verification from this repository:
+
+```sh
+php tests/lint.php
+php tests/run.php
+sh build-package.sh
+php tests/package.php <extracted-staging-parent>
+php tests/package-runtime.php <extracted-staging-parent>/apple_photos_connector
+git diff --check
+```
+
+The package must contain exactly one `apple_photos_connector/` directory and
+must not contain tests, development tools, build products, AppleDouble files,
+or private keys. The unsigned package intentionally has no
+`appinfo/signature.json`; that file is added only by the official Nextcloud
+signing step using the issued app certificate.
 
 
 ## API und Alben
