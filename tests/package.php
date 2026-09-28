@@ -28,7 +28,7 @@ foreach (['LICENSE', 'CHANGELOG.md', 'appinfo/info.xml'] as $name) {
 }
 $signaturePath = "$root/appinfo/signature.json";
 $validSignature = json_encode([
-    'appId' => 'apple_photos_connector',
+    'hashes' => ['appinfo/info.xml' => str_repeat('a', 64)],
     'signature' => 'base64-signature',
     'certificate' => "-----BEGIN CERTIFICATE-----\ncertificate\n-----END CERTIFICATE-----",
 ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
@@ -38,11 +38,24 @@ try {
     exec($command . ' 2>&1', $output, $code);
     if ($code !== 0) throw new RuntimeException('Valid signature.json rejected');
 } finally { unlink($signaturePath); }
+file_put_contents($signaturePath, json_encode([
+    'appId' => 'apple_photos_connector',
+    'hashes' => ['appinfo/info.xml' => str_repeat('a', 64)],
+    'signature' => 'base64-signature',
+    'certificate' => "-----BEGIN CERTIFICATE-----\ncertificate\n-----END CERTIFICATE-----",
+], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+try {
+    $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/../tools/check-package.php') . ' ' . escapeshellarg($stage);
+    exec($command . ' 2>&1', $output, $code);
+    if ($code !== 0) throw new RuntimeException('Valid signature.json with optional appId rejected');
+} finally { unlink($signaturePath); }
 foreach ([
-    '{"appId":"wrong","signature":"x","certificate":"-----BEGIN CERTIFICATE-----\\nx\\n-----END CERTIFICATE-----"}',
-    '{"appId":"apple_photos_connector","signature":"","certificate":"-----BEGIN CERTIFICATE-----\\nx\\n-----END CERTIFICATE-----"}',
-    '{"appId":"apple_photos_connector","signature":"x","certificate":"not-a-certificate"}',
-    '{"appId":"apple_photos_connector","signature":"x"}',
+    '{"hashes":{},"signature":"x","certificate":"-----BEGIN CERTIFICATE-----\\nx\\n-----END CERTIFICATE-----"}',
+    '{"hashes":{"appinfo/info.xml":"x"},"signature":"","certificate":"-----BEGIN CERTIFICATE-----\\nx\\n-----END CERTIFICATE-----"}',
+    '{"hashes":{"appinfo/info.xml":"x"},"signature":"x","certificate":""}',
+    '{"hashes":{"appinfo/info.xml":"x"},"signature":"x","certificate":"not-a-certificate"}',
+    '{"appId":"wrong","hashes":{"appinfo/info.xml":"x"},"signature":"x","certificate":"-----BEGIN CERTIFICATE-----\\nx\\n-----END CERTIFICATE-----"}',
+    '{"hashes":{"appinfo/info.xml":"x"},"signature":"x"}',
 ] as $invalidSignature) {
     file_put_contents($signaturePath, $invalidSignature);
     try { rejected($stage); } finally { unlink($signaturePath); }
@@ -53,4 +66,4 @@ foreach (['<id>apple_photos_connector</id>' => '<id>wrong</id>', '<version>0.8.8
     file_put_contents($path, str_replace($from, $to, $original));
     try { rejected($stage); } finally { file_put_contents($path, $original); }
 }
-echo "PASS: invalid package scenarios and signature.json validation\n";
+echo "PASS: invalid package scenarios and Nextcloud signature.json validation\n";
