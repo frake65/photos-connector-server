@@ -3,7 +3,7 @@
 Changes follow the Keep a Changelog categories. This package contains the server
 app; companion macOS changes below are provided for context.
 
-## [0.8.8] - 2026-09-25
+## [0.8.8] - 2026-09-29
 
 ### Added
 - Add Inventory protocol v2 capability negotiation and transactional,
@@ -17,6 +17,14 @@ app; companion macOS changes below are provided for context.
   official signature only during the controlled Nextcloud signing step.
 - Move release, documentation, website and issue links to the dedicated server
   repository.
+- Officially sign and verify the release with Nextcloud 35 `occ
+  integrity:check-app`.
+- Publish the [0.8.8 GitHub release](https://github.com/frake65/photos-connector-server/releases/tag/v0.8.8)
+  with the signed archive. Its SHA-256 is
+  `66989a72e15765fa08f04602d1fdbe4b269f2207eb5874e7d1d49734e00affcd`.
+- Nextcloud 35 uses `hashes`, `signature` and `certificate` in
+  `appinfo/signature.json`; `appId` is optional. App-Store submission and
+  deployment remain separate follow-up steps.
 
 ## [0.8.7] - 2026-09-24
 
