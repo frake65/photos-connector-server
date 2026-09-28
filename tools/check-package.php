@@ -21,10 +21,11 @@ $signaturePath = $root . '/appinfo/signature.json';
 if (is_file($signaturePath)) {
     $signature = json_decode((string) file_get_contents($signaturePath), true);
     if (!is_array($signature) || json_last_error() !== JSON_ERROR_NONE) fail('signature.json is not valid JSON');
-    foreach (['appId', 'signature', 'certificate'] as $key) {
+    foreach (['signature', 'certificate'] as $key) {
         if (!isset($signature[$key]) || !is_string($signature[$key]) || trim($signature[$key]) === '') fail("signature.json missing non-empty $key");
     }
-    if ($signature['appId'] !== 'apple_photos_connector') fail('signature.json appId mismatch');
+    if (!is_array($signature['hashes']) || $signature['hashes'] === []) fail('signature.json hashes must be a non-empty object');
+    if (array_key_exists('appId', $signature) && ($signature['appId'] !== 'apple_photos_connector')) fail('signature.json appId mismatch');
     if (!preg_match('/-----BEGIN CERTIFICATE-----\s+.+\s+-----END CERTIFICATE-----/s', $signature['certificate'])) fail('signature.json certificate is not PEM encoded');
 }
 $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
