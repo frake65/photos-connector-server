@@ -106,7 +106,16 @@ Run-Tests prüfen neue, bekannte und leere Inventare, separate Runs, Benutzertre
 
 Upload-Tests prüfen Aufträge, Retry nach Fehler, idempotente Bestätigung, Benutzer-/Pfadgrenzen und erhaltene Dateien bei leeren Folgescans. Der Datei-Locator ist dabei ein Testdouble; echte WebDAV-/Nextcloud-Dateisystemintegration ist nicht Teil dieses lokalen Tests. Die Identitätstests verwenden zwischen Scans bestätigte Dateireferenzen als Fixtures, damit sie weiterhin die unveränderte Apple-Identitätslogik prüfen.
 
-Am 10. September 2026 bestanden die lokale PHP-Syntaxprüfung (45 Dateien) und alle eigenständigen SQLite-Szenarien einschließlich der vollständigen Fresh-Install-Migration. Eine echte Nextcloud-Integration wurde dabei nicht ausgeführt. Die deklarierte Nextcloud-Spanne ist keine getestete Versionsmatrix; insbesondere sind MySQL/PostgreSQL-Sperrverhalten und die Photos-Adapter-Integration separat zu prüfen.
+Aktueller Prüfstand für Version 0.8.8: Die PHP-Syntaxprüfung für 59 Dateien,
+die eigenständigen SQLite-Tests sowie die Paket- und Laufzeitprüfungen sind
+bestanden. Die Metadaten wurden gegen die offizielle Nextcloud-`info.xsd`
+geprüft. Die Migration und Integration wurden auf der entbehrlichen
+Nextcloud-35-Testinstanz geprüft; parallele PostgreSQL-Idempotenz und die
+Inventory-v2-HTTP-Wiederholung wurden ebenfalls geprüft. Im macOS-E2E-Test
+wurden Upload, Albumabgleich und eine Wiederholung ohne neue Upload-Tickets
+bestätigt. Die deklarierte Nextcloud-Spanne 34–35 ist weiterhin keine
+vollständig getestete Versionsmatrix; andere Zielsysteme müssen separat
+geprüft werden.
 
 ## Release 0.8.8 verification
 
