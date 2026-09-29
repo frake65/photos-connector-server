@@ -138,6 +138,17 @@ or private keys. The unsigned package intentionally has no
 `appinfo/signature.json`; that file is added only by the official Nextcloud
 signing step using the issued app certificate.
 
+The signed 0.8.8 archive is available at:
+https://github.com/frake65/photos-connector-server/releases/download/v0.8.8/apple_photos_connector-0.8.8-signed.tar.gz
+
+Its SHA-256 is
+`66989a72e15765fa08f04602d1fdbe4b269f2207eb5874e7d1d49734e00affcd` and its
+size is 51.078 bytes. `occ integrity:check-app` completed successfully. With
+Nextcloud 35, `appinfo/signature.json` contains `hashes`, `signature` and
+`certificate`; `appId` is not required. App-Store submission and deployment
+are separate follow-up steps and are not part of this repository release
+procedure.
+
 
 ## API und Alben
 
