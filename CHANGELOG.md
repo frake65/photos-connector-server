@@ -3,7 +3,24 @@
 Changes follow the Keep a Changelog categories. This package contains the server
 app; companion macOS changes below are provided for context.
 
-## [0.8.8] - 2026-09-29
+## [0.9.0] - 2026-10-05
+
+### Changed
+- Continue the Inventory-v2 and user-scoped idempotency behavior introduced in
+  0.8.8, with server-side replay protection and non-destructive imports.
+- Keep the current companion-client behavior: selected assets are processed in
+  bounded 100-asset tranches; known files are skipped by inventory and
+  incomplete uploads are retried by a later import.
+
+### Compatibility and limitations
+- Requires Nextcloud 34–35, PHP 8.2 or newer, Nextcloud Photos and the
+  compatible Photos Connector companion app. Inventory protocol v2 is required.
+- No new end-to-end or performance success is claimed. The controlled 100-asset
+  client test remains open after `InventoryCore.UploadError code=8` before a
+  verifiable inventory transport event. The previous 1,218-asset server run
+  remains unchanged and is not a valid client-resume test.
+
+## [0.8.8] - 2026-09-25
 
 ### Added
 - Add Inventory protocol v2 capability negotiation and transactional,
@@ -17,14 +34,6 @@ app; companion macOS changes below are provided for context.
   official signature only during the controlled Nextcloud signing step.
 - Move release, documentation, website and issue links to the dedicated server
   repository.
-- Officially sign and verify the release with Nextcloud 35 `occ
-  integrity:check-app`.
-- Publish the [0.8.8 GitHub release](https://github.com/frake65/photos-connector-server/releases/tag/v0.8.8)
-  with the signed archive. Its SHA-256 is
-  `66989a72e15765fa08f04602d1fdbe4b269f2207eb5874e7d1d49734e00affcd`.
-- Nextcloud 35 uses `hashes`, `signature` and `certificate` in
-  `appinfo/signature.json`; `appId` is optional. App-Store submission and
-  deployment remain separate follow-up steps.
 
 ## [0.8.7] - 2026-09-24
 

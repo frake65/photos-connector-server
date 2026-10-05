@@ -3,7 +3,7 @@
 The server-side source, release preparation and issue tracker are maintained in
 the [Photos Connector server repository](https://github.com/frake65/photos-connector-server).
 
-App-ID: `apple_photos_connector`, Version 0.8.8 laut `appinfo/info.xml`. PHP ab 8.2; die App-Metadaten deklarieren Nextcloud 34–35. Die separate macOS-App **Photos Connector** ist erforderlich und wird nicht über den Nextcloud App Store verteilt. Original-Uploads und additive Album-Synchronisation sind implementiert. Album-Recovery und idempotente Wiederholung wurden manuell mit Nextcloud 35 und Photos 8.0.0 geprüft.
+App-ID: `apple_photos_connector`, Version 0.9.0 laut `appinfo/info.xml`. PHP ab 8.2; die App-Metadaten deklarieren Nextcloud 34–35. Die separate macOS-App **Photos Connector** ist erforderlich und wird nicht über den Nextcloud App Store verteilt. Original-Uploads, Inventory-v2 mit serverseitiger Idempotenz und additive Album-Synchronisation sind implementiert. Für 0.9.0 werden keine neuen E2E- oder Performance-Erfolge behauptet; der kontrollierte 100-Asset-Test bleibt wegen `InventoryCore.UploadError code=8` vor nachweisbarem Inventory-Transport offen.
 
 ## Frische Serverinstallation
 
@@ -86,7 +86,7 @@ Dieser Lauf verwendet Nextclouds echten QueryBuilder und dieselben Inventarszena
 ## Paketierung / Packaging
 
 Run `sh build-package.sh` from the repository root. The default
-output is `.build/server/apple_photos_connector-0.8.8.tar.gz`, containing exactly
+output is `.build/server/apple_photos_connector-0.9.0.tar.gz`, containing exactly
 one `apple_photos_connector/` directory. The script stages only runtime folders,
 README, composer metadata, LICENSE and CHANGELOG; tests and tooling are excluded.
 It strips macOS archive metadata. No signing or upload occurs.
@@ -106,7 +106,7 @@ Run-Tests prüfen neue, bekannte und leere Inventare, separate Runs, Benutzertre
 
 Upload-Tests prüfen Aufträge, Retry nach Fehler, idempotente Bestätigung, Benutzer-/Pfadgrenzen und erhaltene Dateien bei leeren Folgescans. Der Datei-Locator ist dabei ein Testdouble; echte WebDAV-/Nextcloud-Dateisystemintegration ist nicht Teil dieses lokalen Tests. Die Identitätstests verwenden zwischen Scans bestätigte Dateireferenzen als Fixtures, damit sie weiterhin die unveränderte Apple-Identitätslogik prüfen.
 
-Aktueller Prüfstand für Version 0.8.8: Die PHP-Syntaxprüfung für 59 Dateien,
+Aktueller Prüfstand für Version 0.9.0: Die PHP-Syntaxprüfung für 59 Dateien,
 die eigenständigen SQLite-Tests sowie die Paket- und Laufzeitprüfungen sind
 bestanden. Die Metadaten wurden gegen die offizielle Nextcloud-`info.xsd`
 geprüft. Die Migration und Integration wurden auf der entbehrlichen
@@ -117,9 +117,9 @@ bestätigt. Die deklarierte Nextcloud-Spanne 34–35 ist weiterhin keine
 vollständig getestete Versionsmatrix; andere Zielsysteme müssen separat
 geprüft werden.
 
-## Release 0.8.8 verification
+## Release 0.9.0 verification
 
-The 0.8.8 release candidate is prepared from the `0.8.8` metadata in
+The 0.9.0 release candidate is prepared from the `0.9.0` metadata in
 `appinfo/info.xml`. Before signing or publishing, run the complete local
 verification from this repository:
 
@@ -137,17 +137,6 @@ must not contain tests, development tools, build products, AppleDouble files,
 or private keys. The unsigned package intentionally has no
 `appinfo/signature.json`; that file is added only by the official Nextcloud
 signing step using the issued app certificate.
-
-The signed 0.8.8 archive is available at:
-https://github.com/frake65/photos-connector-server/releases/download/v0.8.8/apple_photos_connector-0.8.8-signed.tar.gz
-
-Its SHA-256 is
-`66989a72e15765fa08f04602d1fdbe4b269f2207eb5874e7d1d49734e00affcd` and its
-size is 51.078 bytes. `occ integrity:check-app` completed successfully. With
-Nextcloud 35, `appinfo/signature.json` contains `hashes`, `signature` and
-`certificate`; `appId` is not required. App-Store submission and deployment
-are separate follow-up steps and are not part of this repository release
-procedure.
 
 
 ## API und Alben
@@ -177,7 +166,7 @@ The additive migration is `Version008600Date20260918000000.php`; there is no
 `Version008700` migration in this release. It creates `apc_content_identities`
 and `apc_content_targets`. The content index is unique by
 `user_id + sha256 + byte_size` and remains separate from `new`/`known` asset
-matching. The server app version is 0.8.8.
+matching. The server app version is 0.9.0.
 
 `uploads/prepare` may return `contentAlreadyPresent` for a confirmed target.
 The client then performs no PUT and no Complete, but can still run album sync.

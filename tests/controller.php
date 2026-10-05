@@ -58,5 +58,5 @@ function controllerScenarios(InventoryRepository $repository): void {
     $statusController = new OCA\ApplePhotosConnector\Controller\StatusController($request, $session);
     $request->headers['Idempotency-Key'] = '550e8400-e29b-41d4-a716-446655440008';
     $status = $statusController->status()->getData();
-    check($status['status'] === 'ok' && $status['protocols']['inventory'] === 2 && $status['version'] === '0.8.8', 'status exposes inventory v2 capability separately from app version');
+    check($status['status'] === 'ok' && $status['protocols']['inventory'] === 2 && $status['version'] === '0.9.0', 'status exposes inventory v2 capability separately from app version');
 }

@@ -1,8 +1,7 @@
 # Photos Connector server release procedure
 
 This document describes the controlled release flow for the Nextcloud app
-`apple_photos_connector`. It applies to version 0.8.8 unless a later release
-explicitly changes the version and compatibility checks.
+`apple_photos_connector`. It applies to version 0.9.0.
 
 ## 1. Prepare and inspect the source
 
@@ -26,7 +25,7 @@ Build from the repository root:
 sh build-package.sh
 ```
 
-The output is `.build/server/apple_photos_connector-0.8.8.tar.gz`. Extract it
+The output is `.build/server/apple_photos_connector-0.9.0.tar.gz`. Extract it
 into a fresh temporary directory and verify:
 
 ```sh
@@ -48,9 +47,8 @@ isolated signing environment when necessary, use restrictive permissions for
 the key, and remove temporary copies after signing. Do not sign by hand and do
 not modify the archive after signing.
 
-The resulting signed app must contain `appinfo/signature.json`. On Nextcloud
-35, verify that the signature contains `hashes`, `signature` and `certificate`;
-`appId` is optional and is not required. Verify the certificate and run the
+The resulting signed app must contain `appinfo/signature.json`. Verify that
+the signature records the expected app ID and certificate, and run the
 official integrity check against the signed app. The package checker permits
 the certificate material only inside this signature file; certificate and key
 files elsewhere remain rejected.
@@ -60,13 +58,7 @@ files elsewhere remain rejected.
 Archive the signed app without changing its contents. Record the SHA-256 hash,
 version, app ID and signature result. Create the Git tag and public release
 only after review of the exact signed archive and its source commit. Attach
-only that unchanged archive and retain the hash in the release notes. For
-version 0.8.8, the release is
-https://github.com/frake65/photos-connector-server/releases/tag/v0.8.8 and the
-direct asset URL is
-https://github.com/frake65/photos-connector-server/releases/download/v0.8.8/apple_photos_connector-0.8.8-signed.tar.gz.
-Its SHA-256 is
-`66989a72e15765fa08f04602d1fdbe4b269f2207eb5874e7d1d49734e00affcd`.
+only that unchanged archive and retain the hash in the release notes.
 
 ## 5. Deployment safety
 
