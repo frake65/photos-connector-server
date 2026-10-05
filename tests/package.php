@@ -62,7 +62,7 @@ foreach ([
 }
 $path = "$root/appinfo/info.xml";
 $original = file_get_contents($path);
-foreach (['<id>apple_photos_connector</id>' => '<id>wrong</id>', '<version>0.8.8</version>' => '<version>9.0.0</version>'] as $from => $to) {
+foreach (['<id>apple_photos_connector</id>' => '<id>wrong</id>', '<version>0.9.0</version>' => '<version>9.0.0</version>'] as $from => $to) {
     file_put_contents($path, str_replace($from, $to, $original));
     try { rejected($stage); } finally { file_put_contents($path, $original); }
 }
