@@ -1,0 +1,37 @@
+name: Submit 0.9.0 to Nextcloud App Store
+
+on:
+  workflow_dispatch:
+
+jobs:
+  submit:
+    environment: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify immutable GitHub release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://github.com/frake65/photos-connector-server/releases/download/v0.9.0/apple_photos_connector-0.9.0-signed.tar.gz'
+          curl --fail --silent --show-error --location "$url" --output /tmp/apple_photos_connector-0.9.0-signed.tar.gz
+          echo '8ff858e2c6f69305129486e7b1c0e94bda55ac4021c9b09aee181be0e0eed47d  /tmp/apple_photos_connector-0.9.0-signed.tar.gz' | sha256sum --check
+
+      - name: Submit release to Nextcloud App Store
+        shell: bash
+        env:
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$APPSTORE_TOKEN"
+          response=$(mktemp)
+          status=$(curl --silent --show-error --location --output "$response" --write-out '%{http_code}' \
+            --request POST 'https://apps.nextcloud.com/api/v1/apps/releases' \
+            --header 'Authorization: Token '"$APPSTORE_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data-raw '{"download":"https://github.com/frake65/photos-connector-server/releases/download/v0.9.0/apple_photos_connector-0.9.0-signed.tar.gz","signature":"HGUNwcMr0Nij8mHspcxAMIJOiXiHSG5XAjMEzozjkHjYGzT7ZFlIbcaaocs0W6k4h2cy8dWemlKOsXaFhUkn8j4A1YCDweYKZKjZbphTNb1MSKVRMrTRGnnDdRHLXEvIvtjt4pxZ7UjLpbUfWFj3kWqaHkmEmTfNK8gaOKSh5nm+o54z7KGvFqs12WQzX+ayM9+BWDawOY1HIjMonaLFZjJmO2Jh40gndpnR0pcYzQFxkV5K+6GmX0YEUC+42JDhSdhC/Qp+lAX0KJogLpltclb2DRsZXjhSOm7SsPlY3V4CrR+HF7m0qAT7nS5lZGxtBaDX8eHgFQY4ygmtg62YFeVgcsBUm08fXKikd99BrIG8oOfYvs1GAnNImkRYzApyVj2WOsKtFURd72ow68LWAeQ4c0osucSXSyhNswzhAJBYWLaN8EFnT9e2S5OqqHFAHykNDe2edQT90kYaNTd3e8yOGgIR4gfN36FWvuSn8+qbiIXEpZQ46p/W0S+bji4PkwldWn+cMb8b64TCmj1nfqVHwI5fXOVRgm699CbEbfwGlnLDjxDGCN3tUxpreuekuFO3UwwD6cJn8MsT8gTaSh/n1e99JiBykHW6p48ZroLL80iuhcee6fmN3p3yPzDP7olAo4XrqxUboWKMLBx4+tKecaKFnConAbxqaqlreyk=","nightly":false}')
+          echo "HTTP status: $status"
+          if [[ "$status" != 200 && "$status" != 201 ]]; then
+            sed -E 's/(token|signature|password|secret)[^,}]*/<redacted>/Ig' "$response"
+            exit 1
+          fi
+          sed -E 's/(token|signature|password|secret)[^,}]*/<redacted>/Ig' "$response"
