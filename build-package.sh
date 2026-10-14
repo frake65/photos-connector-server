@@ -16,11 +16,7 @@ cp "$source_dir/LICENSE" "$source_dir/CHANGELOG.md" "$source_dir/README.md" "$so
 find "$app" -type f \( -name '.DS_Store' -o -name '._*' \) -delete
 sh "$source_dir/check-package.sh" "$stage" "${INFO_XSD:-}"
 archive="$output_dir/apple_photos_connector-0.9.1.tar.gz"
-if tar --version | grep -q bsdtar; then
-    COPYFILE_DISABLE=1 tar --no-xattrs --no-acls --no-fflags -czf "$archive" -C "$stage" apple_photos_connector
-else
-    COPYFILE_DISABLE=1 tar -czf "$archive" -C "$stage" apple_photos_connector
-fi
+python3 "$source_dir/tools/create-release-archive.py" "$stage" "$archive"
 if tar -tzf "$archive" | grep -E '(^|/)(\._[^/]*|\.DS_Store)$' >/dev/null; then
     echo 'Refusing package containing AppleDouble or .DS_Store entries' >&2
     exit 1
