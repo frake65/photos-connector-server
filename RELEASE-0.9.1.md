@@ -22,16 +22,17 @@ It does not include changes to the macOS or iOS companion apps.
 
 - App ID: `apple_photos_connector`
 - PHP: 8.2 or newer
-- Declared Nextcloud range: 34–35
+- Declared Nextcloud version: 35 only
 - Declared Nextcloud Photos range: 7.0.0–8.0.0
 - The existing companion client payload shape remains supported by the server
   controller tests.
 
-The release candidate has passed the repository's standalone tests and package
-checks. Those tests do not replace runtime validation on Nextcloud 34 and 35;
-the declared range should be confirmed on those versions before publication.
-The controlled end-to-end companion-client upload check recorded as open in
-0.9.0 also remains open.
+The app is declared for Nextcloud 35 only because no Nextcloud 34 test instance
+is available. The signed candidate was enabled and passed the official app
+integrity check on the available Nextcloud 35.0.2 RC2 test instance with Photos
+8.0.0. The instance was restored to app version 0.9.0 after the check. The
+controlled end-to-end companion-client upload check recorded as open in 0.9.0
+also remains open.
 
 ## Upgrade notes
 

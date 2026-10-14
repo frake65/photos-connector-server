@@ -18,6 +18,10 @@ app; companion macOS changes below are provided for context.
 - Cover malformed album requests, rollback and sanitized error responses with
   controller scenarios.
 
+### Compatibility
+- Limit the declared Nextcloud version to 35 because a Nextcloud 34 test
+  instance is no longer available.
+
 ## [0.9.0] - 2026-10-05
 
 ### Changed

@@ -3,7 +3,7 @@
 The server-side source, release preparation and issue tracker are maintained in
 the [Photos Connector server repository](https://github.com/frake65/photos-connector-server).
 
-App-ID: `apple_photos_connector`, Version 0.9.1 laut `appinfo/info.xml`. PHP ab 8.2; die App-Metadaten deklarieren Nextcloud 34–35. Die separate macOS-App **Photos Connector** ist erforderlich und wird nicht über den Nextcloud App Store verteilt. Original-Uploads, Inventory-v2 mit serverseitiger Idempotenz und additive Album-Synchronisation sind implementiert. Der kontrollierte 100-Asset-Test bleibt wegen `InventoryCore.UploadError code=8` vor nachweisbarem Inventory-Transport offen.
+App-ID: `apple_photos_connector`, Version 0.9.1 laut `appinfo/info.xml`. PHP ab 8.2; die App-Metadaten deklarieren ausschließlich Nextcloud 35. Die separate macOS-App **Photos Connector** ist erforderlich und wird nicht über den Nextcloud App Store verteilt. Original-Uploads, Inventory-v2 mit serverseitiger Idempotenz und additive Album-Synchronisation sind implementiert. Der kontrollierte 100-Asset-Test bleibt wegen `InventoryCore.UploadError code=8` vor nachweisbarem Inventory-Transport offen.
 
 ## Frische Serverinstallation
 
@@ -113,15 +113,20 @@ geprüft. Die Migration und Integration wurden auf der entbehrlichen
 Nextcloud-35-Testinstanz geprüft; parallele PostgreSQL-Idempotenz und die
 Inventory-v2-HTTP-Wiederholung wurden ebenfalls geprüft. Im macOS-E2E-Test
 wurden Upload, Albumabgleich und eine Wiederholung ohne neue Upload-Tickets
-bestätigt. Die deklarierte Nextcloud-Spanne 34–35 ist weiterhin keine
-vollständig getestete Versionsmatrix; andere Zielsysteme müssen separat
-geprüft werden.
+bestätigt. Die für 0.9.0 deklarierte Nextcloud-Spanne 34–35 war keine
+vollständig getestete Versionsmatrix. Version 0.9.1 deklariert deshalb nur
+Nextcloud 35. Der 0.9.1-Kandidat wurde auf Nextcloud 35.0.2 RC2 mit Photos
+8.0.0 installiert und mit `occ integrity:check-app` geprüft. Eine Nextcloud-34-
+Instanz stand für diese Freigabe nicht zur Verfügung.
 
 ## Release 0.9.1 verification
 
 The 0.9.1 release candidate is prepared from the `0.9.1` metadata in
-`appinfo/info.xml`. Before signing or publishing, run the complete local
-verification from this repository:
+`appinfo/info.xml`. The local PHP, standalone SQLite, package and extracted
+runtime checks passed. The signed candidate was enabled and checked on
+Nextcloud 35.0.2 RC2 with Photos 8.0.0; the test instance was restored to 0.9.0
+afterward. Version 0.9.1 declares Nextcloud 35 only. A Nextcloud 34 instance
+was not available for this release. To repeat the local checks, run:
 
 ```sh
 php tests/lint.php
