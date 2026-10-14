@@ -1,7 +1,7 @@
 # Photos Connector server release procedure
 
 This document describes the controlled release flow for the Nextcloud app
-`apple_photos_connector`. It applies to version 0.9.0.
+`apple_photos_connector`. It applies to version 0.9.1.
 
 ## 1. Prepare and inspect the source
 
@@ -25,12 +25,12 @@ Build from the repository root:
 sh build-package.sh
 ```
 
-The output is `.build/server/apple_photos_connector-0.9.0.tar.gz`. Extract it
+The output is `.build/server/apple_photos_connector-0.9.1.tar.gz`. Extract it
 into a fresh temporary directory and verify:
 
 ```sh
 php tests/package.php /path/to/staging-parent
-php tests/package-runtime.php /path/to/staging-parent/apple_photos_connector
+php tests/package-runtime.php /path/to/staging-parent
 ```
 
 Validate `appinfo/info.xml` against the official Nextcloud `info.xsd` and

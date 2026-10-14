@@ -38,6 +38,7 @@ locatorScenarios();
 albumScenarios();
 albumControllerScenarios($pdo);
 adapterScenarios(new OCA\ApplePhotosConnector\Db\AlbumMapRepository(new TestHarness\Connection($pdo)));
+albumControllerHardeningScenarios($pdo);
 albumSyncDiagnosticControllerScenario();
 albumRecoveryOrchestratorScenario(new TestHarness\Connection($pdo),$pdo);
 explicitAlbumSelectionOrchestratorScenario(new TestHarness\Connection($pdo),$pdo);

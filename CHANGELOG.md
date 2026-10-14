@@ -3,6 +3,21 @@
 Changes follow the Keep a Changelog categories. This package contains the server
 app; companion macOS changes below are provided for context.
 
+## [0.9.1] - 2026-10-10
+
+### Fixed
+- Reject malformed album sync identifiers and selection lists instead of
+  accepting incomplete input as a successful sync.
+- Validate album inventory membership arrays before writing and return a
+  generic server error for unexpected inventory failures.
+- Return generic album sync operation messages rather than underlying
+  exception text.
+
+### Added
+- Report unknown album membership identities in the inventory response.
+- Cover malformed album requests, rollback and sanitized error responses with
+  controller scenarios.
+
 ## [0.9.0] - 2026-10-05
 
 ### Changed

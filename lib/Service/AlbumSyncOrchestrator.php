@@ -163,8 +163,8 @@ final class AlbumSyncOrchestrator {
         $diagnostic = $error instanceof AlbumSyncDiagnosticException ? $error : null;
         $cause = $diagnostic?->getPrevious() ?? $error;
         $stage = $diagnostic?->stage ?? 'album.sync.unclassified';
-        if (!defined('OC_DEBUG') || !OC_DEBUG) return $cause->getMessage();
-        return $stage.' ['.get_class($cause).']: '.$cause->getMessage();
+        error_log('Apple Photos Connector: album sync failed stage=' . $stage . ' exception=' . get_class($cause));
+        return 'Album operation failed';
     }
 
     private function debug(string $message): void {

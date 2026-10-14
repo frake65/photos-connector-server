@@ -12,6 +12,8 @@ Diese Beschreibung setzt eine frische Serverinstallation mit leerem Connector-Zu
 
 Das Schema steht in `album-inventory-request.schema.json`. Fehlende Alben und Mitgliedschaften werden nicht gelöscht; wiederholte Inventare sind idempotent. Alben verschiedener Sources bleiben getrennt. PhotoKit liefert Ordnerhierarchien nur, soweit `PHCollectionList` sie verfügbar macht; Cloud-Identifier können fehlen.
 
+`source.sourceId` muss eine UUID sein. Jede Collection verlangt `kind: "album"` oder `"folder"`. `assets` und `assetIdentities` müssen, falls vorhanden, Listen nichtleerer Strings sein; bei Übermittlung beider Felder müssen ihre Inhalte übereinstimmen. Ungültige Formen werden mit HTTP 400 abgelehnt. Nicht im Inventar derselben Source gefundene Asset-Identitäten werden ausgelassen und in `membershipsSkippedUnknown` gezählt. Unerwartete Serverfehler liefern HTTP 500 mit einer allgemeinen Fehlermeldung.
+
 `POST /index.php/apps/apple_photos_connector/api/v1/inventory`
 
 HTTPS, HTTP Basic Authentication mit Nextcloud-Benutzername und App-Passwort sowie `Content-Type: application/json` verwenden. Der Server authentifiziert über Nextcloud. Der Endpoint ist für normale angemeldete Benutzer verfügbar; anonyme und Cookie-only-Aufrufe werden abgewiesen. Keine CORS-Freigabe. Der Webserver muss den Authorization-Header an PHP weitergeben.
@@ -120,7 +122,7 @@ Die Speicherung des Album-Inventars erfolgt anhand Benutzer, Source und lokalem 
 {"sourceId":"550e8400-e29b-41d4-a716-446655440000"}
 ```
 
-HTTP 200 enthält `status: "completed"` oder bei einzelnen Fehlern `"partial"` und `summary` mit `albumsSeen`, `albumsCreated`, `albumsReused`, `foldersSkipped`, `membershipsSeen`, `membershipsCreated`, `membershipsReused`, `membershipsSkippedNotImported` und `errors`. Fehlende Source bzw. fehlendes Album-Inventar ergibt HTTP 400. Wiederholungen ergänzen Mitgliedschaften, ohne fehlende Quelldaten als Löschauftrag zu behandeln.
+HTTP 200 enthält `status: "completed"` oder bei einzelnen Fehlern `"partial"` und `summary` mit `albumsSeen`, `albumsCreated`, `albumsReused`, `foldersSkipped`, `membershipsSeen`, `membershipsCreated`, `membershipsReused`, `membershipsSkippedNotImported` und `errors`. Einzelne Sync-Fehler enthalten eine allgemeine Meldung; interne Exception-Texte werden nicht an den Client übertragen. Eine Source-ID muss eine UUID sein. Ungültige Auswahlfelder müssen Listen von Strings sein; sonst antwortet der Endpoint mit HTTP 400. Fehlende registrierte Source bzw. fehlendes Album-Inventar ergibt HTTP 200 mit leerer Zusammenfassung. Wiederholungen ergänzen Mitgliedschaften, ohne fehlende Quelldaten als Löschauftrag zu behandeln.
 
 ## Recovery of missing files
 

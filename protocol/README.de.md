@@ -8,6 +8,8 @@ Diese Beschreibung setzt eine frische Serverinstallation mit leerem Connector-Zu
 
 `POST /index.php/apps/apple_photos_connector/api/v1/albums/inventory` überträgt ein versioniertes Album-Inventar als JSON über HTTPS und HTTP Basic/App-Passwort. Die Album-Identität kombiniert Benutzer, `sourceId` und PhotoKit-`localIdentifier`; Namen sind keine technischen Schlüssel. Fehlende Alben und Memberships werden nicht gelöscht; wiederholte Inventare sind idempotent und Sources bleiben getrennt.
 
+`source.sourceId` muss eine UUID sein. Jede Collection benötigt `kind: "album"` oder `"folder"`. `assets` und `assetIdentities` müssen, wenn vorhanden, Listen nichtleerer Strings sein; wenn beide Felder gesendet werden, müssen sie übereinstimmen. Ungültige Formen ergeben HTTP 400. Asset-Identitäten, die nicht im Inventar derselben Source gefunden werden, werden ausgelassen und in `membershipsSkippedUnknown` gezählt. Unerwartete Serverfehler liefern HTTP 500 mit einer allgemeinen Fehlermeldung.
+
 ## Inventory und Identität
 
 `POST /index.php/apps/apple_photos_connector/api/v1/inventory` erwartet `source` und `assets` gemäß `inventory-request.schema.json`. Der Server verwaltet die autoritative Import-Historie und antwortet mit `runId`, Zuständen und Upload-Tickets. `new` bedeutet, dass keine bestätigte Dateizuordnung existiert oder die zugeordnete Datei fehlt. Eine vorhandene zugeordnete Datei ergibt `known`.
@@ -22,7 +24,7 @@ Der vollständige Ablauf und Recovery-Fälle stehen in [uploads.md](uploads.md).
 
 ## Albums
 
-Album Membership ist von der Dateiübertragung getrennt. Nicht importierte Assets werden nicht als Membership aufgenommen. Fehlende Quelldaten führen nicht zu destruktiven Löschungen. Ordner werden nicht als Photos-Alben angelegt.
+Album Membership ist von der Dateiübertragung getrennt. Nicht importierte Assets werden nicht als Membership aufgenommen. Fehlende Quelldaten führen nicht zu destruktiven Löschungen. Ordner werden nicht als Photos-Alben angelegt. Die `sourceId` beim Sync muss eine UUID sein; Auswahlfelder müssen Listen von Strings enthalten, sonst antwortet der Endpoint mit HTTP 400. Einzelne Sync-Fehler enthalten eine allgemeine Meldung statt interner Exception-Texte.
 
 ## Statuscodes und Sicherheit
 

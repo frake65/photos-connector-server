@@ -21,7 +21,11 @@ function albumControllerScenarios(PDO $pdo): void {
  check(count($membershipRows)===2 && array_column($membershipRows,'album_id')===[$albumId,$albumId] && array_map('intval',array_column($membershipRows,'asset_id'))===array_map('intval',$assetIds),'Swift-shaped payload persists both memberships against the internal album ID and existing assets');
  $r2=$c->inventory(); check($r2->getStatus()===200 && (int)$pdo->query('SELECT COUNT(*) FROM apc_source_albums')->fetchColumn()===1 && (int)$pdo->query('SELECT COUNT(*) FROM apc_album_memberships')->fetchColumn()===2,'Swift-shaped album inventory is idempotent');
  $req->params['source']['sourceId']='550e8400-e29b-41d4-a716-446655440011'; check($c->inventory()->getStatus()===400,'album controller rejects unknown source'); check((int)$pdo->query('SELECT COUNT(*) FROM apc_source_albums')->fetchColumn()===1,'failed album request leaves state unchanged');
- $req->params['source']['sourceId']=$source; $req->params['albums']=[['localIdentifier'=>'album2','name'=>'Mixed','kind'=>'album','assets'=>['asset1','local:never-seen']],['localIdentifier'=>'album3','name'=>'Unknown','kind'=>'album','assets'=>['cloud:missing']],['localIdentifier'=>'album4','name'=>'Empty','kind'=>'album','assets'=>[]]]; check($c->inventory()->getStatus()===200,'unknown album members are skipped without rollback'); check((int)$pdo->query('SELECT COUNT(*) FROM apc_source_albums')->fetchColumn()===4,'albums with unknown or empty members are retained'); check((int)$pdo->query('SELECT COUNT(*) FROM apc_album_memberships')->fetchColumn()===3,'known membership persists while unknown members are skipped');
+ $req->params['source']['sourceId']=$source; $req->params['albums']=[['localIdentifier'=>'album2','name'=>'Mixed','kind'=>'album','assets'=>['asset1','local:never-seen']],['localIdentifier'=>'album3','name'=>'Unknown','kind'=>'album','assets'=>['cloud:missing']],['localIdentifier'=>'album4','name'=>'Empty','kind'=>'album','assets'=>[]]]; $unknownResponse=$c->inventory(); check($unknownResponse->getStatus()===200,'unknown album members are skipped without rollback'); check(($unknownResponse->getData()['membershipsSkippedUnknown']??null)===2,'response counts unknown same-source asset identities'); check((int)$pdo->query('SELECT COUNT(*) FROM apc_source_albums')->fetchColumn()===4,'albums with unknown or empty members are retained'); check((int)$pdo->query('SELECT COUNT(*) FROM apc_album_memberships')->fetchColumn()===3,'known membership persists while unknown members are skipped');
+ $req->params['albums']=[['localIdentifier'=>'bad-list','name'=>'Bad list','kind'=>'album','assets'=>'asset1']]; check($c->inventory()->getStatus()===400,'scalar membership payload is rejected'); check((int)$pdo->query("SELECT COUNT(*) FROM apc_source_albums WHERE local_identifier='bad-list'")->fetchColumn()===0,'invalid membership payload writes no album');
+ $req->params['albums']=[['localIdentifier'=>'bad-map','name'=>'Bad map','kind'=>'album','assets'=>['member'=>'asset1']]]; check($c->inventory()->getStatus()===400,'associative membership map is rejected instead of treated as a list');
+ $req->params['albums']=[['localIdentifier'=>'bad-item','name'=>'Bad item','kind'=>'album','assets'=>['asset1',false]]]; check($c->inventory()->getStatus()===400,'non-string membership identity is rejected');
+ $req->params['source']['sourceId']='not-a-uuid'; check($c->inventory()->getStatus()===400,'album inventory rejects malformed source UUID'); $req->params['source']['sourceId']=$source;
  $sourceB='550e8400-e29b-41d4-a716-446655440011'; $pdo->exec("INSERT INTO apc_sources(user_id,source_id,name,created_at,last_seen_at) VALUES ('u1','$sourceB','B','now','now')"); $pdo->exec("INSERT INTO apc_assets(user_id,source_id,local_identifier,cloud_identifier,filename,media_type,creation_date,first_seen_at,last_seen_at) VALUES ('u1','$sourceB','assetB',NULL,'b.jpg','image',NULL,'now','now')");
  $req->params['source']['sourceId']=$source; $req->params['albums'][0]['assets']=['assetB']; $before=(int)$pdo->query('SELECT COUNT(*) FROM apc_album_memberships')->fetchColumn(); check($c->inventory()->getStatus()===200 && (int)$pdo->query('SELECT COUNT(*) FROM apc_album_memberships')->fetchColumn()===$before,'cross-source membership is skipped without partial state');
  $req->params['albums'][0]['assets']=['asset1']; $foreignSession=new class implements \OCP\IUserSession { function getUser():mixed{return new class{function getUID():string{return 'u2';}};} }; $foreignController=new AlbumController($req,$foreignSession,$db); check($foreignController->inventory()->getStatus()===400 && (int)$pdo->query("SELECT COUNT(*) FROM apc_source_albums WHERE user_id='u2'")->fetchColumn()===0,'cross-user membership rejected without partial state');
@@ -71,4 +75,32 @@ function albumSyncDiagnosticControllerScenario(): void {
  check(($data['diagnostic']['exceptionClass']??null)===RuntimeException::class,'debug response identifies original exception class');
  check(($data['diagnostic']['request']['selected_album_count']??null)===0 && ($data['diagnostic']['request']['selected_asset_prefixes']['cloud']??null)===1,'debug response records empty album selection and prefixed cloud asset count');
  check(!array_key_exists('trace',$data['diagnostic']??[]),'debug response does not include a stack trace');
+}
+
+function albumControllerHardeningScenarios(PDO $pdo): void {
+ $db=new TestHarness\Connection($pdo); $source='550e8400-e29b-41d4-a716-446655440031';
+ $pdo->exec("INSERT INTO apc_sources(user_id,source_id,name,created_at,last_seen_at) VALUES ('hardening-user','$source','Hardening','now','now')");
+ $pdo->exec("INSERT INTO apc_source_albums(user_id,source_id,local_identifier,name,created_at,last_seen_at,kind) VALUES ('hardening-user','$source','hardening-album','Hardening','now','now','album')");
+ $session=new class implements \OCP\IUserSession { function getUser():mixed{return new class{function getUID():string{return 'hardening-user';}};} };
+ $request=new class($source) implements \OCP\IRequest { public function __construct(public string $source){} function getHeader(string $n):string{return $n==='Authorization'?'Basic test':'application/json';} function getParam(string $n):mixed{return null;} function getParams():array{return ['sourceId'=>$this->source,'selectedAlbumIDs'=>[42],'selectedAssetIDs'=>['valid',false]];} };
+ $maps=new \OCA\ApplePhotosConnector\Db\AlbumMapRepository($db); $mapper=new FakeAlbumMapper();
+ $resolver=new \OCA\ApplePhotosConnector\Service\AlbumResolutionService($db,$maps,$mapper,new FakePhotosVersion());
+ $memberships=new \OCA\ApplePhotosConnector\Service\AlbumMembershipService($db,$maps,$mapper,new FakePhotosVersion(),new FakeAlbumRoot(77));
+ $sync=new \OCA\ApplePhotosConnector\Service\AlbumSyncOrchestrator($db,$maps,$resolver,$memberships);
+ $controller=new AlbumController($request,$session,$db,$sync);
+ check($controller->sync()->getStatus()===400,'album sync rejects non-list or non-string selection items');
+ $request->source='not-a-uuid'; $request->getParams();
+ check($controller->sync()->getStatus()===400,'album sync rejects malformed source UUID');
+
+ $mapper->createFailures=1; $request->source=$source;
+ $request=new class($source) implements \OCP\IRequest { public function __construct(public string $source){} function getHeader(string $n):string{return $n==='Authorization'?'Basic test':'application/json';} function getParam(string $n):mixed{return null;} function getParams():array{return ['sourceId'=>$this->source];} };
+ $syncController=new AlbumController($request,$session,$db,$sync); $partial=$syncController->sync(); $data=$partial->getData();
+ check($partial->getStatus()===200 && ($data['summary']['errors'][0]['message']??null)==='Album operation failed','partial album sync error response hides Photos exception text');
+
+ $failingDb=new class implements \OCP\IDBConnection {
+  private bool $transaction=false; function beginTransaction():void{$this->transaction=true;} function inTransaction():bool{return $this->transaction;} function rollBack():void{$this->transaction=false;} function getQueryBuilder():never{throw new RuntimeException('synthetic-secret-marker');}
+ };
+ $inventoryRequest=new class($source) implements \OCP\IRequest { public function __construct(private string $source){} function getHeader(string $n):string{return $n==='Authorization'?'Basic test':'application/json';} function getParam(string $n):mixed{return null;} function getParams():array{return ['source'=>['sourceId'=>$this->source,'name'=>'Error test'],'albums'=>[]];} };
+ $error=(new AlbumController($inventoryRequest,$session,$failingDb))->inventory();
+ check($error->getStatus()===500 && ($error->getData()['error']??null)==='Album inventory failed' && !str_contains(json_encode($error->getData()),'synthetic-secret-marker'),'album inventory returns generic 500 for unexpected database exceptions');
 }
