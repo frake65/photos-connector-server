@@ -34,4 +34,8 @@ Der Import ist nicht destruktiv. Bereits in Nextcloud gespeicherte Dateien werde
     <commands>
         <command>OCA\ApplePhotosConnector\Command\AlbumSyncCommand</command>
     </commands>
+    <background-jobs>
+        <job>OCA\ApplePhotosConnector\BackgroundJob\MetadataCatalogRecoveryJob</job>
+        <job>OCA\ApplePhotosConnector\BackgroundJob\MetadataCatalogWorkerJob</job>
+    </background-jobs>
 </info>

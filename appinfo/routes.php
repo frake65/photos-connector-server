@@ -8,4 +8,6 @@ return ['routes' => [
     ['name' => 'upload#prepare', 'url' => '/api/v1/uploads/prepare', 'verb' => 'POST'],
     ['name' => 'album#inventory', 'url' => '/api/v1/albums/inventory', 'verb' => 'POST'],
     ['name' => 'album#sync', 'url' => '/api/v1/albums/sync', 'verb' => 'POST'],
+    ['name' => 'metadataCatalog#start', 'url' => '/api/v1/catalog/scans', 'verb' => 'POST'],
+    ['name' => 'metadataCatalog#status', 'url' => '/api/v1/catalog/scans/{scanId}', 'verb' => 'GET'],
 ]];

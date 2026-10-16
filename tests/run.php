@@ -23,6 +23,8 @@ $contentMigration = new OCA\ApplePhotosConnector\Migration\Version008600Date2026
 $contentMigration->changeSchema(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
 $inventoryV2Migration = new OCA\ApplePhotosConnector\Migration\Version008800Date20260925000000();
 $inventoryV2Migration->changeSchema(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
+$catalogMigration = new OCA\ApplePhotosConnector\Migration\Version009200Date20261016000000();
+$catalogMigration->changeSchema(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
 $schema->apply($pdo);
 $contentMigration->postSchemaChange(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
 require __DIR__ . '/fresh-install.php';
@@ -57,4 +59,6 @@ contentIdentityScenarios();
 require __DIR__ . '/inventory-idempotency.php';
 inventoryIdempotencyScenarios($pdo);
 inventoryIdempotencyConcurrencyScenario();
+require __DIR__ . '/metadata-catalog.php';
+metadataCatalogScenarios(new TestHarness\Connection($pdo), $pdo);
 echo "All standalone SQLite tests passed.\n";

@@ -12,6 +12,8 @@ function freshDatabase(): PDO {
     $contentMigration->changeSchema(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
     (new OCA\ApplePhotosConnector\Migration\Version008800Date20260925000000())->changeSchema(
         new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
+    (new OCA\ApplePhotosConnector\Migration\Version009200Date20261016000000())->changeSchema(
+        new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
     $schema->apply($pdo);
     $contentMigration->postSchemaChange(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
     return $pdo;
@@ -19,9 +21,9 @@ function freshDatabase(): PDO {
 
 function freshInstallScenarios(): void {
     $pdo = freshDatabase();
-    check(count(glob(__DIR__ . '/../lib/Migration/*.php')) === 3, 'F1: base schema plus additive content and idempotent inventory migrations');
+    check(count(glob(__DIR__ . '/../lib/Migration/*.php')) === 4, 'F1: base schema plus additive content, idempotent inventory and metadata-catalog migrations');
     $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'apc_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
-    check($tables === ['apc_album_memberships','apc_assets','apc_content_identities','apc_content_targets','apc_import_runs','apc_inventory_idempotency','apc_nextcloud_album_map','apc_source_albums','apc_sources','apc_upload_targets','apc_uploads'], 'F2: eleven tables created from empty schema including idempotent inventory');
+    check($tables === ['apc_album_memberships','apc_assets','apc_catalog_jobs','apc_catalog_seen','apc_content_identities','apc_content_targets','apc_import_runs','apc_inventory_idempotency','apc_metadata_catalog','apc_nextcloud_album_map','apc_source_albums','apc_sources','apc_upload_targets','apc_uploads'], 'F2: additive metadata catalog tables are present on a fresh install');
     $columns = array_column($pdo->query('PRAGMA table_info(apc_assets)')->fetchAll(PDO::FETCH_ASSOC), null, 'name');
     check(isset($columns['current_upload_target_id']) && $columns['current_upload_target_id']['notnull'] === 0, 'F3: current_upload_target_id nullable');
     $pdo->exec("INSERT INTO apc_assets (user_id,source_id,local_identifier,media_type,first_seen_at,last_seen_at) VALUES ('u','s','a','image','now','now'),('v','s','b','image','now','now'),('u','t','c','image','now','now'),('u','s','d','image','now','now')");
