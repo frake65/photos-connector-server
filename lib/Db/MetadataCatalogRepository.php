@@ -141,7 +141,7 @@ final class MetadataCatalogRepository {
         if($affected>0)return;
 
         // Some drivers report zero updated rows when existing values were unchanged.
-        $select=$this->db->getQueryBuilder();$select->select('1')->from($table)
+        $select=$this->db->getQueryBuilder();$select->select((string)array_key_first($keys))->from($table)
             ->where($select->expr()->andX(...$this->conditions($select,$keys)))->setMaxResults(1);
         $result=$select->executeQuery();
         try{if($result->fetchOne()!==false)return;}finally{$result->closeCursor();}
