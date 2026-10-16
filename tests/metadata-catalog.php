@@ -166,6 +166,15 @@ function metadataCatalogScenarios(TestHarness\Connection $db,PDO $pdo): void {
         &&$filteredFolder->queryOffsets===range(0,1300,50)
         &&$filteredDone['counters']['pages']===27&&$filteredDone['counters']['incomplete']===false,
         'MC9c: filtered 1,251-file Nextcloud 35 page sequence catalogs all IDs and ends only on an empty result');
+    $filteredAgain=$service->start('filtered-limit',30000,50);
+    for($i=0;$i<30&&$service->get('filtered-limit',$filteredAgain['scanId'])['state']==='queued';$i++)
+        $service->process($filteredAgain['scanId'],50);
+    $repeatDone=$service->get('filtered-limit',$filteredAgain['scanId']);
+    $repeatCounts=$pdo->prepare('SELECT COUNT(*),COUNT(DISTINCT file_id),SUM(CASE WHEN last_scan_id=? THEN 1 ELSE 0 END) FROM apc_metadata_catalog WHERE user_id=? AND scope_folder_id=?');
+    $repeatCounts->execute([$filteredAgain['scanId'],'filtered-limit',30000]);$repeatRow=$repeatCounts->fetch(PDO::FETCH_NUM);
+    check($repeatDone['state']==='completed'&&$repeatDone['counters']['filesCatalogued']===1251
+        &&array_map('intval',$repeatRow)===[1251,1251,1251],
+        'MC9f: a repeated PostgreSQL-safe catalog scan updates existing identities without duplicate rows');
 
     $smallFiltered=new MetadataCatalogTestFolder(31500,[new MetadataCatalogTestFile(31501)]);
     $smallFiltered->filterFolderAfterLimit=true;$root->users['small-filtered']=new MetadataCatalogTestFolder(31,[$smallFiltered]);

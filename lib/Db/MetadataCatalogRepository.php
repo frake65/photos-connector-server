@@ -73,8 +73,8 @@ final class MetadataCatalogRepository {
                 $keys=['user_id'=>$user,'scope_folder_id'=>$folderId,'file_id'=>$file['fileId']];
                 $values=['mime_type'=>$file['mimeType'],'bytes'=>$file['bytes'],'mtime'=>$file['mtime'],'etag'=>$file['etag'],
                     'last_scan_id'=>$scanId,'indexed_at'=>$now];
-                $this->db->setValues('apc_metadata_catalog',$keys,$values);
-                $this->db->setValues('apc_catalog_seen',['scan_id'=>$scanId,'file_id'=>$file['fileId']],['seen_at'=>$now]);
+                $this->updateOrInsert('apc_metadata_catalog',$keys,$values);
+                $this->updateOrInsert('apc_catalog_seen',['scan_id'=>$scanId,'file_id'=>$file['fileId']],['seen_at'=>$now]);
             }
             $qCount=$this->db->getQueryBuilder();
             $qCount->select($qCount->func()->count('file_id'))->from('apc_catalog_seen')
@@ -125,6 +125,47 @@ final class MetadataCatalogRepository {
             $q->expr()->andX($q->expr()->eq('state',$q->createNamedParameter('running')),$q->expr()->lt('lease_until',$q->createNamedParameter($now)))
         ))->orderBy('updated_at','ASC')->setMaxResults(max(1,min(100,$limit)));
         $r=$q->executeQuery();try{return array_column($r->fetchAllAssociative(),'scan_id');}finally{$r->closeCursor();}
+    }
+
+    /**
+     * Update before inserting so PostgreSQL never has to recover from a unique violation
+     * inside savePage's transaction. IDBConnection::setValues() uses insert-then-update,
+     * which leaves PostgreSQL's transaction aborted after the expected conflict.
+     * Catalog writes for the same scope/scan are serialized by the active-scope key and lease.
+     */
+    private function updateOrInsert(string $table,array $keys,array $values): void {
+        $update=$this->db->getQueryBuilder();$update->update($table);
+        foreach($values as $name=>$value)$update->set($name,$update->createNamedParameter($value,$this->parameterType($value)));
+        $where=$this->conditions($update,$keys);
+        $affected=$update->where($update->expr()->andX(...$where))->executeStatement();
+        if($affected>0)return;
+
+        // Some drivers report zero updated rows when existing values were unchanged.
+        $select=$this->db->getQueryBuilder();$select->select('1')->from($table)
+            ->where($select->expr()->andX(...$this->conditions($select,$keys)))->setMaxResults(1);
+        $result=$select->executeQuery();
+        try{if($result->fetchOne()!==false)return;}finally{$result->closeCursor();}
+
+        $insert=$this->db->getQueryBuilder();
+        $insert->insert($table)->values(array_map(
+            fn($value)=>$insert->createNamedParameter($value,$this->parameterType($value)),
+            array_merge($keys,$values)
+        ))->executeStatement();
+    }
+
+    private function conditions(object $query,array $keys): array {
+        $conditions=[];
+        foreach($keys as $name=>$value){
+            $conditions[]=$value===null?$query->expr()->isNull($name):$query->expr()->eq(
+                $name,$query->createNamedParameter($value,$this->parameterType($value))
+            );
+        }
+        return $conditions;
+    }
+
+    private function parameterType(mixed $value): int {
+        return match(true){is_int($value)=>IQueryBuilder::PARAM_INT,$value===null=>IQueryBuilder::PARAM_NULL,
+            default=>IQueryBuilder::PARAM_STR};
     }
 
     private function byId(string $id): ?array {

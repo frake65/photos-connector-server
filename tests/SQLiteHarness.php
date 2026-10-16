@@ -159,7 +159,9 @@ namespace TestHarness {
             }
         }; }
         public function orX(string ...$where): string { return '(' . implode(' OR ', $where) . ')'; }
+        public function andX(string ...$where): string { return '(' . implode(' AND ', $where) . ')'; }
         public function eq(string $key, string $parameter): string { return "$key = $parameter"; }
+        public function isNull(string $key): string { return "$key IS NULL"; }
         public function isNotNull(string $key): string { return "$key IS NOT NULL"; }
         public function lt(string $key, string $parameter): string { return "$key < $parameter"; }
         // Match Nextcloud's IExpressionBuilder: column comparisons use eq('a.id', 'm.asset_id'); there is no col().
