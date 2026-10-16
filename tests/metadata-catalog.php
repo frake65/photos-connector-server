@@ -20,15 +20,20 @@ final class MetadataCatalogTestFile implements OCP\Files\File,OCP\Files\FileInfo
 
 final class MetadataCatalogTestFolder implements OCP\Files\Folder,OCP\Files\FileInfo {
     public int $maxReturned=0;public int $searchCalls=0;public bool $readable=true;public bool $duplicateAliases=false;
+    public bool $filterFolderAfterLimit=false;public array $queryOffsets=[];
     public function __construct(public int $id,public array $children=[],public string $etag='folder-1'){}
     public function getId(): int{return $this->id;}
     public function getEtag(): string{return $this->etag;}
     public function isReadable(): bool{return $this->readable;}
     public function isSubNode(object $node): bool {foreach($this->allNodes() as $candidate)if($candidate===$node)return true;return false;}
     public function search(OCP\Files\Search\ISearchQuery $query): array {
-        $this->searchCalls++;$this->assertAllNamesQuery($query);
-        $all=$this->allNodes();usort($all,static fn(object $a,object $b):int=>$a->getId()<=>$b->getId());
-        $page=array_slice($all,$query->getOffset(),$query->getLimit());$this->maxReturned=max($this->maxReturned,count($page));
+        $this->searchCalls++;$this->queryOffsets[]=$query->getOffset();$this->assertAllNamesQuery($query);
+        $all=$this->allNodes();if($this->filterFolderAfterLimit)$all[]=$this;
+        usort($all,static fn(object $a,object $b):int=>$a->getId()<=>$b->getId());
+        $page=array_slice($all,$query->getOffset(),$query->getLimit());
+        // Nextcloud 35 can apply LIMIT before excluding the selected folder's own cache row.
+        if($this->filterFolderAfterLimit)$page=array_values(array_filter($page,fn(object $node):bool=>$node!==$this));
+        $this->maxReturned=max($this->maxReturned,count($page));
         return $this->duplicateAliases?array_merge($page,$page):$page;
     }
     private function assertAllNamesQuery(OCP\Files\Search\ISearchQuery $query): void {
@@ -57,6 +62,30 @@ final class MetadataCatalogTestJobList implements OCP\BackgroundJob\IJobList {
 
 function metadataCatalogScenarios(TestHarness\Connection $db,PDO $pdo): void {
     $repository=new OCA\ApplePhotosConnector\Db\MetadataCatalogRepository($db);
+    $jobList=new MetadataCatalogTestJobList();
+    $bootContext=new class($jobList) implements OCP\AppFramework\Bootstrap\IBootContext {
+        private object $container;
+        public function __construct(object $jobs) {
+            $this->container=new class($jobs) {
+                public function __construct(private object $jobs) {}
+                public function get(string $service): object {
+                    if($service!==OCP\BackgroundJob\IJobList::class)throw new LogicException('unexpected boot service');
+                    return $this->jobs;
+                }
+            };
+        }
+        public function getAppContainer(): object{return $this->container;}
+    };
+    $application=new OCA\ApplePhotosConnector\AppInfo\Application();
+    $application->boot($bootContext);$application->boot($bootContext);
+    $recoveryClass=OCA\ApplePhotosConnector\BackgroundJob\MetadataCatalogRecoveryJob::class;
+    $registeredRecovery=array_values(array_filter($jobList->jobs,static fn(array $job):bool=>$job[0]===$recoveryClass));
+    $appInfo=file_get_contents(dirname(__DIR__).'/appinfo/info.xml');
+    check(count($registeredRecovery)===1&&$registeredRecovery[0]===[$recoveryClass,null]
+        &&str_contains($appInfo,'<job>OCA\\ApplePhotosConnector\\BackgroundJob\\MetadataCatalogRecoveryJob</job>')
+        &&str_contains($appInfo,'<job>OCA\\ApplePhotosConnector\\BackgroundJob\\MetadataCatalogWorkerJob</job>')
+        &&!is_file(dirname(__DIR__).'/appinfo/app.php'),
+        'MC0: recovery and worker jobs use supported registration without appinfo/app.php');
     $jobList=new MetadataCatalogTestJobList();
     $nestedImage=new MetadataCatalogTestFile(7002);
     $nestedVideo=new MetadataCatalogTestFile(7004,'video/mp4',2048,101,'video-etag');
@@ -113,11 +142,47 @@ function metadataCatalogScenarios(TestHarness\Connection $db,PDO $pdo): void {
     for($i=0;$i<20&&$service->get('large',$large['scanId'])['state']==='queued';$i++)$service->process($large['scanId'],100);
     $largeComplete=$service->get('large',$large['scanId']);
     check($largeComplete['state']==='completed'&&$largeComplete['counters']['filesCatalogued']===1250
-        &&$largeFolder->maxReturned<=100&&$largeComplete['counters']['pages']===13,
+        &&$largeFolder->maxReturned<=100&&$largeComplete['counters']['pages']===14,
         'MC9: 1,250-entry flat directory completes through bounded, persistent pages');
     printf("METRIC metadata-catalog synthetic-flat: nodes=1250 pages=%d maxPage=%d maxBatchMs=%d processPeakBytes=%d\n",
         $largeComplete['counters']['pages'],$largeFolder->maxReturned,$largeComplete['counters']['maxBatchMilliseconds'],
         $largeComplete['counters']['processPeakMemoryBytes']);
+
+    $filteredChildren=array_map(static fn(int $id)=>new MetadataCatalogTestFile($id),range(30001,31251));
+    $filteredFolder=new MetadataCatalogTestFolder(30000,$filteredChildren);$filteredFolder->filterFolderAfterLimit=true;
+    $root->users['filtered-limit']=new MetadataCatalogTestFolder(30,[$filteredFolder]);
+    $filteredScan=$service->start('filtered-limit',30000,50);$service->process($filteredScan['scanId'],50);
+    $shortFirstPage=$service->get('filtered-limit',$filteredScan['scanId']);
+    check($shortFirstPage['state']==='queued'&&$shortFirstPage['offset']===50
+        &&$shortFirstPage['counters']['lastBatchItems']===49&&$filteredFolder->queryOffsets===[0],
+        'MC9b: a 49-node visible page after a 50-row query advances by requested rows and does not complete');
+    for($i=0;$i<30&&$service->get('filtered-limit',$filteredScan['scanId'])['state']==='queued';$i++)
+        $service->process($filteredScan['scanId'],50);
+    $filteredDone=$service->get('filtered-limit',$filteredScan['scanId']);
+    $filteredIds=$pdo->prepare('SELECT file_id FROM apc_metadata_catalog WHERE last_scan_id=? ORDER BY file_id');
+    $filteredIds->execute([$filteredScan['scanId']]);$cataloguedIds=array_map('intval',$filteredIds->fetchAll(PDO::FETCH_COLUMN));
+    check($filteredDone['state']==='completed'&&$filteredDone['counters']['filesCatalogued']===1251
+        &&count($cataloguedIds)===1251&&$cataloguedIds===range(30001,31251)
+        &&$filteredFolder->queryOffsets===range(0,1300,50)
+        &&$filteredDone['counters']['pages']===27&&$filteredDone['counters']['incomplete']===false,
+        'MC9c: filtered 1,251-file Nextcloud 35 page sequence catalogs all IDs and ends only on an empty result');
+
+    $smallFiltered=new MetadataCatalogTestFolder(31500,[new MetadataCatalogTestFile(31501)]);
+    $smallFiltered->filterFolderAfterLimit=true;$root->users['small-filtered']=new MetadataCatalogTestFolder(31,[$smallFiltered]);
+    $smallScan=$service->start('small-filtered',31500,50);
+    for($i=0;$i<3&&$service->get('small-filtered',$smallScan['scanId'])['state']==='queued';$i++)$service->process($smallScan['scanId'],50);
+    $smallDone=$service->get('small-filtered',$smallScan['scanId']);
+    check($smallDone['state']==='completed'&&$smallDone['counters']['filesCatalogued']===1
+        &&$smallFiltered->queryOffsets===[0,50],
+        'MC9d: a non-empty folder smaller than one page is completed after the confirming empty query');
+
+    $emptyFiltered=new MetadataCatalogTestFolder(31600);$emptyFiltered->filterFolderAfterLimit=true;
+    $root->users['empty-filtered']=new MetadataCatalogTestFolder(32,[$emptyFiltered]);
+    $emptyScan=$service->start('empty-filtered',31600,50);$service->process($emptyScan['scanId'],50);
+    $emptyDone=$service->get('empty-filtered',$emptyScan['scanId']);
+    check($emptyDone['state']==='completed'&&$emptyDone['counters']['filesCatalogued']===0
+        &&$emptyFiltered->searchCalls===1&&$emptyDone['offset']===0,
+        'MC9e: an empty folder terminates immediately without cursor drift or a queued loop');
 
     $aliasFolder=new MetadataCatalogTestFolder(7250,array_map(static fn(int $id)=>new MetadataCatalogTestFile($id),range(7251,7253)));
     $aliasFolder->duplicateAliases=true;$root->users['aliases']=new MetadataCatalogTestFolder(8,[$aliasFolder]);
@@ -130,7 +195,7 @@ function metadataCatalogScenarios(TestHarness\Connection $db,PDO $pdo): void {
 
     $changingFile=new MetadataCatalogTestFile(7301,'image/jpeg',50,200,'before',true,true);
     $changingFolder=new MetadataCatalogTestFolder(7300,[$changingFile]);$root->users['change']=new MetadataCatalogTestFolder(5,[$changingFolder]);
-    $changing=$service->start('change',7300,10);$service->process($changing['scanId'],10);
+    $changing=$service->start('change',7300,10);$service->process($changing['scanId'],10);$service->process($changing['scanId'],10);
     $changedResult=$service->get('change',$changing['scanId']);
     check($changedResult['state']==='completed'&&$changedResult['counters']['changedDuringScan']===1
         &&$changedResult['counters']['incomplete']===true

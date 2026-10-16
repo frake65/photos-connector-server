@@ -12,9 +12,17 @@ namespace OCP {
     interface IUserSession { public function getUser(): mixed; }
 }
 namespace OCP\AppFramework {
-    class App {}
+    class App { public function __construct(string $appName, array $urlParams = []) {} }
     class Controller {
         public function __construct(string $name, protected \OCP\IRequest $request) {}
+    }
+}
+namespace OCP\AppFramework\Bootstrap {
+    interface IRegistrationContext {}
+    interface IBootContext {}
+    interface IBootstrap {
+        public function register(IRegistrationContext $context): void;
+        public function boot(IBootContext $context): void;
     }
 }
 namespace OCP\App {

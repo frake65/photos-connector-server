@@ -96,9 +96,11 @@ final class MetadataCatalogService {
             $counters['processPeakMemoryBytes']=max((int)$counters['processPeakMemoryBytes'],memory_get_peak_usage(true));
             // Folder::search can return directories as well as files. Keep this explicitly a Node count.
             $counters['nodesVisited']+=count($nodes);
-            // Folder::search limits cache rows before mapping them to visible Nodes. Shared mounts
-            // can expand one row into multiple Nodes, so advance by the query limit in that case.
-            $newOffset=$offset+min($limit,count($nodes));$changedDuringPage=$afterFolderEtag!==$currentFolderEtag;
+            // Nextcloud 35 limits cache rows before mapping/filtering them to visible Nodes.
+            // In particular, the selected folder itself can consume one row and then be removed,
+            // so a full query page may contain fewer Nodes than requested. Advance by the requested
+            // search rows, never by the visible Node count (or aliases could also distort it).
+            $newOffset=$offset+(count($nodes)>0?$limit:0);$changedDuringPage=$afterFolderEtag!==$currentFolderEtag;
             $restarts=(int)$job['etag_restarts'];
             if($changedDuringPage){
                 $restarts++;
@@ -107,7 +109,9 @@ final class MetadataCatalogService {
             }
             $tooManyChanges=$changedDuringPage&&$restarts>self::MAX_ETAG_RESTARTS;
             if($tooManyChanges)$counters['incomplete']=true;
-            $complete=count($nodes)<$limit&&!$changedDuringPage;
+            // A short page is not an end signal: Nextcloud can filter a row after applying LIMIT.
+            // An empty visible result is the only verified end condition for the supported API.
+            $complete=count($nodes)===0&&!$changedDuringPage;
             $state=($complete||$tooManyChanges)?'completed':'queued';
             $this->jobs->savePage($id,$user,$folderId,$files,$newOffset,$counters,$state,self::now(),$tooManyChanges?'folder_changed_too_often':null);
             if($changedDuringPage&&!$tooManyChanges){$this->jobs->restart($id,$afterFolderEtag,$restarts,$counters,self::now());$this->queue($id,$limit);}
