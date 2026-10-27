@@ -14,6 +14,8 @@ function freshDatabase(): PDO {
         new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
     (new OCA\ApplePhotosConnector\Migration\Version009200Date20261016000000())->changeSchema(
         new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
+    (new OCA\ApplePhotosConnector\Migration\Version009300Date20261027000000())->changeSchema(
+        new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
     $schema->apply($pdo);
     $contentMigration->postSchemaChange(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
     return $pdo;
@@ -21,14 +23,17 @@ function freshDatabase(): PDO {
 
 function freshInstallScenarios(): void {
     $pdo = freshDatabase();
-    check(count(glob(__DIR__ . '/../lib/Migration/*.php')) === 4, 'F1: base schema plus additive content, idempotent inventory and metadata-catalog migrations');
+    check(count(glob(__DIR__ . '/../lib/Migration/*.php')) === 5, 'F1: base schema plus additive content, idempotent inventory, metadata-catalog and lease-fencing migrations');
     $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'apc_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
     check($tables === ['apc_album_memberships','apc_assets','apc_catalog_jobs','apc_catalog_seen','apc_content_identities','apc_content_targets','apc_import_runs','apc_inventory_idempotency','apc_metadata_catalog','apc_nextcloud_album_map','apc_source_albums','apc_sources','apc_upload_targets','apc_uploads'], 'F2: additive metadata catalog tables are present on a fresh install');
+    $catalogJobColumns=array_column($pdo->query('PRAGMA table_info(apc_catalog_jobs)')->fetchAll(PDO::FETCH_ASSOC),null,'name');
+    check(isset($catalogJobColumns['lease_generation'])&&(int)$catalogJobColumns['lease_generation']['dflt_value']===0,
+        'F2a: additive lease-fencing column exists and defaults existing rows to generation zero');
     $columns = array_column($pdo->query('PRAGMA table_info(apc_assets)')->fetchAll(PDO::FETCH_ASSOC), null, 'name');
     check(isset($columns['current_upload_target_id']) && $columns['current_upload_target_id']['notnull'] === 0, 'F3: current_upload_target_id nullable');
     $pdo->exec("INSERT INTO apc_assets (user_id,source_id,local_identifier,media_type,first_seen_at,last_seen_at) VALUES ('u','s','a','image','now','now'),('v','s','b','image','now','now'),('u','t','c','image','now','now'),('u','s','d','image','now','now')");
-    $insert = $pdo->prepare('INSERT INTO apc_upload_targets (user_id,source_id,asset_id,filename,path,path_key,bytes,sha256,attempt) VALUES (?,?,?,?,?,?,?,?,0)');
-    $target = function(string $u, string $s, int $asset, string $path) use ($insert, $pdo): int {
+    $target = function(string $u, string $s, int $asset, string $path) use ($pdo): int {
+        $insert = $pdo->prepare('INSERT INTO apc_upload_targets (user_id,source_id,asset_id,filename,path,path_key,bytes,sha256,attempt) VALUES (?,?,?,?,?,?,?,?,0)');
         $insert->execute([$u,$s,$asset,'test.jpg',$path,hash('sha256',$path),8,hash('sha256','ORIGINAL')]);
         return (int)$pdo->lastInsertId();
     };

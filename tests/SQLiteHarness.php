@@ -36,7 +36,7 @@ namespace OCP\AppFramework\Http {
     }
 }
 namespace OCP\DB {
-    interface ISchemaWrapper {}
+    interface ISchemaWrapper { public function hasTable(string $name): bool; public function getTable(string $name): object; public function createTable(string $name): object; }
     class Types {
         public const BOOLEAN = 'boolean', BIGINT = 'bigint', INTEGER = 'integer', STRING = 'string', TEXT = 'text';
     }
@@ -107,6 +107,7 @@ namespace OCP\Lock {
 }
 namespace TestHarness {
     class Connection implements \OCP\IDBConnection {
+        public int $writeDelayMs = 0;
         public function __construct(public \PDO $pdo) {
             $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         }
@@ -115,7 +116,7 @@ namespace TestHarness {
         public function rollBack(): void { $this->pdo->rollBack(); }
         public function inTransaction(): bool { return $this->pdo->inTransaction(); }
         public function lastInsertId(string $table): string { return $this->pdo->lastInsertId(); }
-        public function getQueryBuilder(): Query { return new Query($this->pdo); }
+        public function getQueryBuilder(): Query { return new Query($this->pdo, $this); }
         public function setValues(string $table, array $keys, array $values, array $preconditions = []): int {
             $where = $keys + $preconditions;
             $whereSql = implode(' AND ', array_map(static fn(string $column): string => $column . ' = ?', array_keys($where)));
@@ -140,7 +141,7 @@ namespace TestHarness {
         private string $table = '';
         private array $parameters = [], $values = [], $where = [], $joins = [];
         private string $columns = '*', $order = '';
-        public function __construct(private \PDO $pdo) {}
+        public function __construct(private \PDO $pdo, private ?Connection $owner = null) {}
         public function select(string ...$columns): self { $this->operation = 'select'; $this->columns=implode(',', $columns) ?: '*'; return $this; }
         public function from(string $table, ?string $alias = null): self { $this->table = $table . ($alias ? ' ' . $alias : ''); return $this; }
         public function insert(string $table): self { $this->operation = 'insert'; $this->table = $table; return $this; }
@@ -164,6 +165,7 @@ namespace TestHarness {
         public function isNull(string $key): string { return "$key IS NULL"; }
         public function isNotNull(string $key): string { return "$key IS NOT NULL"; }
         public function lt(string $key, string $parameter): string { return "$key < $parameter"; }
+        public function gt(string $key, string $parameter): string { return "$key > $parameter"; }
         // Match Nextcloud's IExpressionBuilder: column comparisons use eq('a.id', 'm.asset_id'); there is no col().
         public function innerJoin(string $fromAlias,string $joinTable,string $alias,string $condition): self { $this->joins[]="INNER JOIN $joinTable $alias ON $condition"; return $this; }
         public function createNamedParameter(mixed $value, mixed $type = null): string {
@@ -184,7 +186,10 @@ namespace TestHarness {
             $statement->execute($this->parameters);
             return $statement;
         }
-        public function executeStatement(): int { return $this->statement()->rowCount(); }
+        public function executeStatement(): int {
+            if($this->operation!=='select'&&$this->owner!==null&&$this->owner->writeDelayMs>0)usleep($this->owner->writeDelayMs*1000);
+            return $this->statement()->rowCount();
+        }
         public function executeQuery(): Result { return new Result($this->statement()); }
     }
     class Result {

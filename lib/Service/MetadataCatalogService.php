@@ -49,24 +49,23 @@ final class MetadataCatalogService {
 
     /** One bounded search page per queued invocation; Nextcloud may expand rows into mount aliases. */
     public function process(string $id,int $batchSize=50): void {
-        $now=self::now();$job=$this->jobs->claim($id,$now,self::after(self::LEASE_SECONDS));if($job===null)return;
+        $batchStartedNs=hrtime(true);$now=self::now();$job=$this->jobs->claim($id,$now,self::after(self::LEASE_SECONDS));if($job===null)return;
         $user=(string)$job['user_id'];$folderId=(int)$job['folder_id'];
         $counters=json_decode((string)$job['counters_json'],true)?:MetadataCatalogRepository::emptyCounters();
-        if((int)$job['attempts']>self::MAX_ATTEMPTS){$this->fail($job,'worker_attempt_limit',$counters);return;}
+        if((int)$job['attempts']>self::MAX_ATTEMPTS){$this->fail($job,'worker_attempt_limit',$counters,$batchStartedNs);return;}
         try {
             $folder=$this->resolveFolder($user,$folderId);
-            if($folder===null||!$folder->isReadable()){$this->fail($job,'folder_unavailable',$counters);return;}
+            if($folder===null||!$folder->isReadable()){$this->fail($job,'folder_unavailable',$counters,$batchStartedNs);return;}
             $currentFolderEtag=(string)$folder->getEtag();
             $recordedFolderEtag=(string)($job['folder_etag']??'');
             if($recordedFolderEtag!==''&&$currentFolderEtag!==$recordedFolderEtag){
                 $restarts=(int)$job['etag_restarts']+1;
-                if($restarts>self::MAX_ETAG_RESTARTS){$counters['etagRestarts']=$restarts;$counters['incomplete']=true;$this->finish($job,'completed',$counters,'folder_changed_too_often');return;}
+                if($restarts>self::MAX_ETAG_RESTARTS){$counters['etagRestarts']=$restarts;$counters['incomplete']=true;$this->finish($job,'incomplete',$counters,'folder_changed_too_often',$batchStartedNs);return;}
                 $counters=$this->restartCounters($restarts);
-                $this->jobs->restart($id,$currentFolderEtag,$restarts,$counters,self::now());$this->queue($id,$batchSize);return;
+                if($this->jobs->restart($id,$currentFolderEtag,$restarts,$counters,self::now(),(int)$job['lease_generation'],$batchStartedNs))$this->queue($id,$batchSize);return;
             }
 
             $limit=max(1,min(self::MAX_BATCH_SIZE,$batchSize));$offset=max(0,(int)$job['offset_value']);
-            $started=hrtime(true);
             $nodes=$folder->search(new CatalogSearchQuery($limit,$offset));
             if(!is_array($nodes))throw new \UnexpectedValueException('search_page_invalid');
             $files=[];$processedFileIds=[];
@@ -89,9 +88,7 @@ final class MetadataCatalogService {
                 } catch(\Throwable){$counters['inaccessible']++;$counters['incomplete']=true;}
             }
             $afterFolderEtag=(string)$folder->getEtag();
-            $elapsed=(int)round((hrtime(true)-$started)/1_000_000);
-            $counters['pages']++;$counters['lastBatchItems']=count($nodes);$counters['lastBatchMilliseconds']=$elapsed;
-            $counters['maxBatchMilliseconds']=max((int)$counters['maxBatchMilliseconds'],$elapsed);
+            $counters['pages']++;$counters['lastBatchItems']=count($nodes);
             // PHP exposes a process-wide high-water mark, not a per-batch peak. Label it honestly.
             $counters['processPeakMemoryBytes']=max((int)$counters['processPeakMemoryBytes'],memory_get_peak_usage(true));
             // Folder::search can return directories as well as files. Keep this explicitly a Node count.
@@ -112,11 +109,12 @@ final class MetadataCatalogService {
             // A short page is not an end signal: Nextcloud can filter a row after applying LIMIT.
             // An empty visible result is the only verified end condition for the supported API.
             $complete=count($nodes)===0&&!$changedDuringPage;
-            $state=($complete||$tooManyChanges)?'completed':'queued';
-            $this->jobs->savePage($id,$user,$folderId,$files,$newOffset,$counters,$state,self::now(),$tooManyChanges?'folder_changed_too_often':null);
-            if($changedDuringPage&&!$tooManyChanges){$this->jobs->restart($id,$afterFolderEtag,$restarts,$counters,self::now());$this->queue($id,$limit);}
-            elseif(!$complete&&!$tooManyChanges)$this->queue($id,$limit);
-        }catch(\Throwable){$this->fail($job,'catalog_scan_failed',$counters);}
+            $state=$tooManyChanges?'incomplete':($complete?(!empty($counters['incomplete'])?'incomplete':'completed'):'queued');
+            if($changedDuringPage&&!$tooManyChanges){
+                if($this->jobs->restart($id,$afterFolderEtag,$restarts,$counters,self::now(),(int)$job['lease_generation'],$batchStartedNs))$this->queue($id,$limit);
+            } elseif($this->jobs->savePage($id,$user,$folderId,$files,$newOffset,$counters,$state,self::now(),
+                (int)$job['lease_generation'],$batchStartedNs,$tooManyChanges?'folder_changed_too_often':null)&&!$complete&&!$tooManyChanges)$this->queue($id,$limit);
+        }catch(\Throwable){$this->fail($job,'catalog_scan_failed',$counters,$batchStartedNs);}
     }
 
     public function recover(): void { foreach($this->jobs->findRecoverable(self::now()) as $id)$this->queue((string)$id,50); }
@@ -128,10 +126,10 @@ final class MetadataCatalogService {
         return null;
     }
     private function queue(string $id,int $batchSize): void { $arg=['scanId'=>$id,'batchSize'=>max(1,min(self::MAX_BATCH_SIZE,$batchSize))];if(!$this->jobList->has(MetadataCatalogWorkerJob::class,$arg))$this->jobList->add(MetadataCatalogWorkerJob::class,$arg); }
-    private function fail(array $job,string $code,array $counters): void { $this->finish($job,'failed',$counters,$code); }
-    private function finish(array $job,string $state,array $counters,?string $error): void {
+    private function fail(array $job,string $code,array $counters,int $batchStartedNs): void { $this->finish($job,'failed',$counters,$code,$batchStartedNs); }
+    private function finish(array $job,string $state,array $counters,?string $error,int $batchStartedNs): void {
         $this->jobs->savePage((string)$job['scan_id'],(string)$job['user_id'],(int)$job['folder_id'],[],(int)$job['offset_value'],
-            $counters,$state,self::now(),$error);
+            $counters,$state,self::now(),(int)$job['lease_generation'],$batchStartedNs,$error);
     }
     private function restartCounters(int $restarts): array {
         $counters=MetadataCatalogRepository::emptyCounters();$counters['etagRestarts']=$restarts;return $counters;

@@ -25,6 +25,8 @@ $inventoryV2Migration = new OCA\ApplePhotosConnector\Migration\Version008800Date
 $inventoryV2Migration->changeSchema(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
 $catalogMigration = new OCA\ApplePhotosConnector\Migration\Version009200Date20261016000000();
 $catalogMigration->changeSchema(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
+$leaseFenceMigration = new OCA\ApplePhotosConnector\Migration\Version009300Date20261027000000();
+$leaseFenceMigration->changeSchema(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
 $schema->apply($pdo);
 $contentMigration->postSchemaChange(new class implements OCP\Migration\IOutput {}, fn () => $schema, []);
 require __DIR__ . '/fresh-install.php';

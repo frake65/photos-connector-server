@@ -20,13 +20,15 @@ final class MetadataCatalogTestFile implements OCP\Files\File,OCP\Files\FileInfo
 
 final class MetadataCatalogTestFolder implements OCP\Files\Folder,OCP\Files\FileInfo {
     public int $maxReturned=0;public int $searchCalls=0;public bool $readable=true;public bool $duplicateAliases=false;
-    public bool $filterFolderAfterLimit=false;public array $queryOffsets=[];
+    public bool $filterFolderAfterLimit=false;public array $queryOffsets=[];public bool $searchFails=false;public int $searchDelayMs=0;
     public function __construct(public int $id,public array $children=[],public string $etag='folder-1'){}
     public function getId(): int{return $this->id;}
     public function getEtag(): string{return $this->etag;}
     public function isReadable(): bool{return $this->readable;}
     public function isSubNode(object $node): bool {foreach($this->allNodes() as $candidate)if($candidate===$node)return true;return false;}
     public function search(OCP\Files\Search\ISearchQuery $query): array {
+        if($this->searchDelayMs>0)usleep($this->searchDelayMs*1000);
+        if($this->searchFails)throw new RuntimeException('synthetic_search_failure');
         $this->searchCalls++;$this->queryOffsets[]=$query->getOffset();$this->assertAllNamesQuery($query);
         $all=$this->allNodes();if($this->filterFolderAfterLimit)$all[]=$this;
         usort($all,static fn(object $a,object $b):int=>$a->getId()<=>$b->getId());
@@ -127,6 +129,43 @@ function metadataCatalogScenarios(TestHarness\Connection $db,PDO $pdo): void {
         &&$repository->claim($claimScan['scanId'],$claimNow,$leaseUntil)===null,
         'MC6a: only one worker can claim an active metadata-catalog job');
 
+    $staleFolder=new MetadataCatalogTestFolder(7060,[new MetadataCatalogTestFile(7061)]);
+    $root->users['stale-worker']=new MetadataCatalogTestFolder(10,[$staleFolder]);
+    $staleScan=$service->start('stale-worker',7060);$staleNow=gmdate('Y-m-d\\TH:i:s\\Z');
+    $oldWorker=$repository->claim($staleScan['scanId'],$staleNow,gmdate('Y-m-d\\TH:i:s\\Z',time()+900));
+    $pdo->prepare("UPDATE apc_catalog_jobs SET lease_until='2000-01-01T00:00:00Z' WHERE scan_id=?")->execute([$staleScan['scanId']]);
+    $newNow=gmdate('Y-m-d\\TH:i:s\\Z');$newWorker=$repository->claim($staleScan['scanId'],$newNow,gmdate('Y-m-d\\TH:i:s\\Z',time()+900));
+    $lateSave=$repository->savePage($staleScan['scanId'],'stale-worker',7060,
+        [['fileId'=>7061,'mimeType'=>'image/jpeg','bytes'=>123,'mtime'=>100,'etag'=>'etag-1']],1,
+        OCA\ApplePhotosConnector\Db\MetadataCatalogRepository::emptyCounters(),'queued',$newNow,
+        (int)$oldWorker['lease_generation'],hrtime(true));
+    $untouched=$pdo->prepare('SELECT state,offset_value,lease_generation FROM apc_catalog_jobs WHERE scan_id=?');
+    $untouched->execute([$staleScan['scanId']]);$fencedJob=$untouched->fetch(PDO::FETCH_ASSOC);
+    $staleRows=$pdo->prepare('SELECT COUNT(*) FROM apc_metadata_catalog WHERE last_scan_id=?');$staleRows->execute([$staleScan['scanId']]);
+    check((int)$oldWorker['lease_generation']===1&&(int)$newWorker['lease_generation']===2&&!$lateSave
+        &&(int)$staleRows->fetchColumn()===0&&$fencedJob['state']==='running'
+        &&(int)$fencedJob['offset_value']===0&&(int)$fencedJob['lease_generation']===2,
+        'MC6b: expired worker write rolls back after a newer lease generation takes ownership');
+    check($repository->savePage($staleScan['scanId'],'stale-worker',7060,
+        [['fileId'=>7061,'mimeType'=>'image/jpeg','bytes'=>123,'mtime'=>100,'etag'=>'etag-1']],1,
+        OCA\ApplePhotosConnector\Db\MetadataCatalogRepository::emptyCounters(),'completed',$newNow,
+        (int)$newWorker['lease_generation'],hrtime(true)),
+        'MC6c: current worker may persist and complete after stale worker is fenced');
+
+    $timedFolder=new MetadataCatalogTestFolder(7070,[new MetadataCatalogTestFile(7071)]);
+    $timedFolder->searchDelayMs=15;$root->users['timed']=new MetadataCatalogTestFolder(11,[$timedFolder]);
+    $timedScan=$service->start('timed',7070,10);$db->writeDelayMs=10;$service->process($timedScan['scanId'],10);$db->writeDelayMs=0;
+    $timed=$service->get('timed',$timedScan['scanId']);
+    check($timed['counters']['lastBatchMilliseconds']>=50&&$timed['counters']['maxBatchMilliseconds']>=50,
+        'MC6d: batch timer includes delayed search, lease claim and catalog/status database writes');
+
+    $brokenFolder=new MetadataCatalogTestFolder(7080);$brokenFolder->searchFails=true;
+    $root->users['error']=new MetadataCatalogTestFolder(12,[$brokenFolder]);
+    $errorScan=$service->start('error',7080);$service->process($errorScan['scanId']);
+    check($service->get('error',$errorScan['scanId'])['state']==='failed'
+        &&$service->get('error',$errorScan['scanId'])['errorCode']==='catalog_scan_failed',
+        'MC6e: search failure is terminal failed, not completed or incomplete');
+
     $lockedFolder=new MetadataCatalogTestFolder(7100,[new MetadataCatalogTestFile(7101)]);$lockedFolder->readable=false;
     $root->users['blocked']=new MetadataCatalogTestFolder(3,[$lockedFolder]);
     try{$service->start('blocked',7100);check(false,'MC7: inaccessible folders must not start');}
@@ -206,10 +245,13 @@ function metadataCatalogScenarios(TestHarness\Connection $db,PDO $pdo): void {
     $changingFolder=new MetadataCatalogTestFolder(7300,[$changingFile]);$root->users['change']=new MetadataCatalogTestFolder(5,[$changingFolder]);
     $changing=$service->start('change',7300,10);$service->process($changing['scanId'],10);$service->process($changing['scanId'],10);
     $changedResult=$service->get('change',$changing['scanId']);
-    check($changedResult['state']==='completed'&&$changedResult['counters']['changedDuringScan']===1
+    check($changedResult['state']==='incomplete'&&$changedResult['completedAt']!==null&&$changedResult['counters']['changedDuringScan']===1
         &&$changedResult['counters']['incomplete']===true
         &&$pdo->query("SELECT COUNT(*) FROM apc_metadata_catalog WHERE last_scan_id='".$changing['scanId']."'")->fetchColumn()==0,
         'MC10: file metadata changing during observation is omitted and marks the scan incomplete');
+    $afterIncomplete=$service->start('change',7300,10);
+    check($afterIncomplete['scanId']!==$changing['scanId']&&$afterIncomplete['state']==='queued',
+        'MC10a: incomplete is terminal and a requested retry starts a new scan instead of relabeling it completed');
 
     $restartFolder=new MetadataCatalogTestFolder(7400,array_map(static fn(int $id)=>new MetadataCatalogTestFile($id),range(7401,7405)));
     $root->users['restart']=new MetadataCatalogTestFolder(6,[$restartFolder]);
