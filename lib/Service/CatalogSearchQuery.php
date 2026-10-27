@@ -11,7 +11,9 @@ use OCP\Files\Search\ISearchQuery;
 /** Public Files-Node search query. Nextcloud applies LIMIT/OFFSET before returning Nodes. */
 final class CatalogSearchQuery implements ISearchQuery {
     public function __construct(private int $limit, private int $offset) {
-        $this->limit = max(1, min(MetadataCatalogService::MAX_BATCH_SIZE, $limit));
+        // A one-row search can return no visible Nodes on NC35 after its folder row
+        // is filtered, even when children remain. Keep the same minimum as the worker.
+        $this->limit = max(MetadataCatalogService::MIN_BATCH_SIZE, min(MetadataCatalogService::MAX_BATCH_SIZE, $limit));
         $this->offset = max(0, $offset);
     }
 

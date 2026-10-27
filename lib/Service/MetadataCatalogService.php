@@ -11,6 +11,9 @@ use OCP\Files\IRootFolder;
 
 /** Metadata-only, resumable catalogue over an explicitly selected user-visible folder. */
 final class MetadataCatalogService {
+    // Nextcloud 35 applies LIMIT before excluding the selected folder's own cache row.
+    // A one-row query can therefore become an empty visible page while child files follow.
+    public const MIN_BATCH_SIZE=2;
     public const MAX_BATCH_SIZE=100;
     private const LEASE_SECONDS=900;
     private const MAX_ETAG_RESTARTS=3;
@@ -30,7 +33,7 @@ final class MetadataCatalogService {
         if($folder===null||!$folder->isReadable())throw new \DomainException('folder_unavailable');
         $existing=$this->jobs->active($user,$folderId);
         if($existing!==null)return $this->present($existing);
-        $batchSize=max(1,min(self::MAX_BATCH_SIZE,$batchSize));
+        $batchSize=max(self::MIN_BATCH_SIZE,min(self::MAX_BATCH_SIZE,$batchSize));
         $id=self::uuid();$now=self::now();
         try {
             $this->jobs->create($id,$user,$folderId,MetadataCatalogRepository::activeKey($user,$folderId),
@@ -65,7 +68,7 @@ final class MetadataCatalogService {
                 if($this->jobs->restart($id,$currentFolderEtag,$restarts,$counters,self::now(),(int)$job['lease_generation'],$batchStartedNs))$this->queue($id,$batchSize);return;
             }
 
-            $limit=max(1,min(self::MAX_BATCH_SIZE,$batchSize));$offset=max(0,(int)$job['offset_value']);
+            $limit=max(self::MIN_BATCH_SIZE,min(self::MAX_BATCH_SIZE,$batchSize));$offset=max(0,(int)$job['offset_value']);
             $nodes=$folder->search(new CatalogSearchQuery($limit,$offset));
             if(!is_array($nodes))throw new \UnexpectedValueException('search_page_invalid');
             $files=[];$processedFileIds=[];
@@ -125,7 +128,7 @@ final class MetadataCatalogService {
         foreach($nodes as $node)if($node instanceof Folder){try{if($node->isReadable())return $node;}catch(\Throwable){}}
         return null;
     }
-    private function queue(string $id,int $batchSize): void { $arg=['scanId'=>$id,'batchSize'=>max(1,min(self::MAX_BATCH_SIZE,$batchSize))];if(!$this->jobList->has(MetadataCatalogWorkerJob::class,$arg))$this->jobList->add(MetadataCatalogWorkerJob::class,$arg); }
+    private function queue(string $id,int $batchSize): void { $arg=['scanId'=>$id,'batchSize'=>max(self::MIN_BATCH_SIZE,min(self::MAX_BATCH_SIZE,$batchSize))];if(!$this->jobList->has(MetadataCatalogWorkerJob::class,$arg))$this->jobList->add(MetadataCatalogWorkerJob::class,$arg); }
     private function fail(array $job,string $code,array $counters,int $batchStartedNs): void { $this->finish($job,'failed',$counters,$code,$batchStartedNs); }
     private function finish(array $job,string $state,array $counters,?string $error,int $batchStartedNs): void {
         $this->jobs->savePage((string)$job['scan_id'],(string)$job['user_id'],(int)$job['folder_id'],[],(int)$job['offset_value'],

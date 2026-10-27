@@ -20,7 +20,7 @@ final class MetadataCatalogTestFile implements OCP\Files\File,OCP\Files\FileInfo
 
 final class MetadataCatalogTestFolder implements OCP\Files\Folder,OCP\Files\FileInfo {
     public int $maxReturned=0;public int $searchCalls=0;public bool $readable=true;public bool $duplicateAliases=false;
-    public bool $filterFolderAfterLimit=false;public array $queryOffsets=[];public bool $searchFails=false;public int $searchDelayMs=0;
+    public bool $filterFolderAfterLimit=false;public array $queryOffsets=[];public array $queryLimits=[];public bool $searchFails=false;public int $searchDelayMs=0;
     public function __construct(public int $id,public array $children=[],public string $etag='folder-1'){}
     public function getId(): int{return $this->id;}
     public function getEtag(): string{return $this->etag;}
@@ -29,7 +29,7 @@ final class MetadataCatalogTestFolder implements OCP\Files\Folder,OCP\Files\File
     public function search(OCP\Files\Search\ISearchQuery $query): array {
         if($this->searchDelayMs>0)usleep($this->searchDelayMs*1000);
         if($this->searchFails)throw new RuntimeException('synthetic_search_failure');
-        $this->searchCalls++;$this->queryOffsets[]=$query->getOffset();$this->assertAllNamesQuery($query);
+        $this->searchCalls++;$this->queryOffsets[]=$query->getOffset();$this->queryLimits[]=$query->getLimit();$this->assertAllNamesQuery($query);
         $all=$this->allNodes();if($this->filterFolderAfterLimit)$all[]=$this;
         usort($all,static fn(object $a,object $b):int=>$a->getId()<=>$b->getId());
         $page=array_slice($all,$query->getOffset(),$query->getLimit());
@@ -223,6 +223,23 @@ function metadataCatalogScenarios(TestHarness\Connection $db,PDO $pdo): void {
     check($smallDone['state']==='completed'&&$smallDone['counters']['filesCatalogued']===1
         &&$smallFiltered->queryOffsets===[0,50],
         'MC9d: a non-empty folder smaller than one page is completed after the confirming empty query');
+
+    $singleLimitFolder=new MetadataCatalogTestFolder(31700,[new MetadataCatalogTestFile(31701)]);
+    $singleLimitFolder->filterFolderAfterLimit=true;$root->users['single-limit']=new MetadataCatalogTestFolder(33,[$singleLimitFolder]);
+    $singleLimit=$service->start('single-limit',31700,1);
+    $service->process($singleLimit['scanId'],1);
+    $singleLimitFirst=$service->get('single-limit',$singleLimit['scanId']);
+    $queuedWorkerArgs=array_values(array_filter($jobList->jobs,static fn(array $job):bool=>
+        $job[0]===OCA\ApplePhotosConnector\BackgroundJob\MetadataCatalogWorkerJob::class
+        &&($job[1]['scanId']??null)===$singleLimit['scanId']));
+    check($singleLimitFirst['state']==='queued'&&$singleLimitFirst['offset']===2
+        &&$singleLimitFirst['counters']['lastBatchItems']===1&&$singleLimitFolder->queryLimits===[2]
+        &&count($queuedWorkerArgs)===1&&$queuedWorkerArgs[0][1]['batchSize']===2,
+        'MC9g: a requested one-row page is clamped before Nextcloud filters the folder row, so a following file cannot look like end-of-scan');
+    $service->process($singleLimit['scanId'],1);$singleLimitDone=$service->get('single-limit',$singleLimit['scanId']);
+    check($singleLimitDone['state']==='completed'&&$singleLimitDone['counters']['filesCatalogued']===1
+        &&$singleLimitFolder->queryOffsets===[0,2],
+        'MC9h: the file behind a folder-filtered one-row boundary is persisted before the confirming empty page');
 
     $emptyFiltered=new MetadataCatalogTestFolder(31600);$emptyFiltered->filterFolderAfterLimit=true;
     $root->users['empty-filtered']=new MetadataCatalogTestFolder(32,[$emptyFiltered]);
